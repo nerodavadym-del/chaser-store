@@ -1,0 +1,3629 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  ShoppingBag,
+  Flame,
+  Search,
+  Check,
+  Plus,
+  Minus,
+  Trash2,
+  Send,
+  Lock,
+  Unlock,
+  User,
+  Euro,
+  Package,
+  TrendingUp,
+  AlertTriangle,
+  Copy,
+  X,
+  ClipboardList,
+  Sparkles,
+  MapPin,
+  PlusCircle,
+  CheckCircle2,
+  KeyRound,
+  Gift,
+  Globe,
+  Truck,
+  Users,
+  BarChart3,
+  RefreshCw,
+  Cloud,
+  CloudOff
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  signInAnonymously,
+  signInWithCustomToken,
+  onAuthStateChanged
+} from 'firebase/auth';
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  collection,
+  onSnapshot
+} from 'firebase/firestore';
+
+// Ініціалізація хмарної бази даних
+const firebaseConfig =
+  typeof __firebase_config !== 'undefined'
+    ? JSON.parse(__firebase_config)
+    : {
+        apiKey: 'demo-api-key',
+        authDomain: 'chaser-store-demo.firebaseapp.com',
+        projectId: 'chaser-store-demo',
+        storageBucket: 'chaser-store-demo.appspot.com',
+        messagingSenderId: '123456789',
+        appId: '1:123456789:web:demo'
+      };
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'chaser-store-app';
+
+// Початкові дані всіх 36 позицій із накладної №26-003125 (залишок 98 шт. після 2 продажів)
+// З повною підтримкою UA (української) та RU (російської) мов для клієнтів
+const INITIAL_PRODUCTS = [
+  // Поличка 1 — CHASER F/P 30 ML PLUS (50 MG)
+  {
+    sku: '00154',
+    nameUa: 'Полуниця',
+    nameRu: 'Клубника',
+    nameSearch: 'клубника полуниця strawberry',
+    line: 'F/P PLUS (50 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (50 MG)',
+    shelfId: 1,
+    strength: 50,
+    stock: 3,
+    initialStock: 3,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '🍓',
+    gradient: 'from-rose-500 via-red-500 to-pink-600',
+    notesUa: 'Соковита стигла полуниця з м’яким солодким післясмаком',
+    notesRu: 'Сочная спелая клубника с мягким сладким послевкусием'
+  },
+  {
+    sku: '00158',
+    nameUa: 'Яблуко',
+    nameRu: 'Яблоко',
+    nameSearch: 'яблоко яблуко apple',
+    line: 'F/P PLUS (50 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (50 MG)',
+    shelfId: 1,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'fruits',
+    emoji: '🍏',
+    gradient: 'from-emerald-400 via-green-500 to-lime-600',
+    notesUa: 'Свіже хрустке зелене яблуко з легкою кислинкою',
+    notesRu: 'Свежее хрустящее зеленое яблоко с легкой кислинкой'
+  },
+  {
+    sku: '00159',
+    nameUa: 'Лісові Ягоди',
+    nameRu: 'Лесные Ягоды',
+    nameSearch: 'ягоды ягоди berries лесные лісові',
+    line: 'F/P PLUS (50 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (50 MG)',
+    shelfId: 1,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '🫐',
+    gradient: 'from-purple-500 via-indigo-500 to-violet-600',
+    notesUa: 'Насичений мікс стиглих лісових ягід',
+    notesRu: 'Насыщенный микс спелых лесных ягод'
+  },
+
+  // Поличка 2 — CHASER BL NEW 30 ML (50 MG)
+  {
+    sku: '00297',
+    nameUa: 'Bali Triple Shot',
+    nameRu: 'Bali Triple Shot',
+    nameSearch: 'бали трипл шот манго маракуйя апельсин bali triple shot',
+    line: 'BL NEW (50 MG)',
+    fullLine: 'CHASER BL NEW 30 ML (50 MG)',
+    shelfId: 2,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🏝️',
+    gradient: 'from-amber-400 via-orange-500 to-rose-500',
+    notesUa: 'Потрійний тропічний вибух: манго, маракуя та цитрусовий холодок',
+    notesRu: 'Тройной тропический взрыв: манго, маракуйя и цитрусовый холодок'
+  },
+  {
+    sku: '00300',
+    nameUa: 'Bubblegum (Жуйка)',
+    nameRu: 'Bubblegum (Жвачка)',
+    nameSearch: 'баблгам жвачка жуйка bubblegum',
+    line: 'BL NEW (50 MG)',
+    fullLine: 'CHASER BL NEW 30 ML (50 MG)',
+    shelfId: 2,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'sweet',
+    emoji: '🍬',
+    gradient: 'from-pink-400 via-fuchsia-500 to-purple-500',
+    notesUa: 'Класична солодка фруктова жуйка з дитинства',
+    notesRu: 'Классическая сладкая фруктовая жвачка из детства'
+  },
+  {
+    sku: '00303',
+    nameUa: 'Flirt (Персик-Гуава)',
+    nameRu: 'Flirt (Персик-Гуава)',
+    nameSearch: 'флирт флірт клубника полуниця гуава персик flirt',
+    line: 'BL NEW (50 MG)',
+    fullLine: 'CHASER BL NEW 30 ML (50 MG)',
+    shelfId: 2,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '💘',
+    gradient: 'from-rose-400 via-pink-500 to-fuchsia-600',
+    notesUa: 'Ніжний мікс соковитого персика, полуниці та тропічної гуави',
+    notesRu: 'Нежный микс сочного персика, клубники и тропической гуавы'
+  },
+  {
+    sku: '01125',
+    nameUa: 'Mojito (Мохіто)',
+    nameRu: 'Mojito (Мохито)',
+    nameSearch: 'мохито мохіто лайм мята м’ята mojito',
+    line: 'BL NEW (50 MG)',
+    fullLine: 'CHASER BL NEW 30 ML (50 MG)',
+    shelfId: 2,
+    strength: 50,
+    stock: 3,
+    initialStock: 3,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '🍹',
+    gradient: 'from-teal-400 via-emerald-500 to-cyan-600',
+    notesUa: 'Освіжаючий кубинський коктейль із лаймом та свіжою м’ятою',
+    notesRu: 'Освежающий кубинский коктейль с лаймом и свежей мятой'
+  },
+  {
+    sku: '01130',
+    nameUa: 'Multifrukt (Мультифрукт)',
+    nameRu: 'Multifrukt (Мультифрукт)',
+    nameSearch: 'мультифрукт multifrukt сок сік тропик',
+    line: 'BL NEW (50 MG)',
+    fullLine: 'CHASER BL NEW 30 ML (50 MG)',
+    shelfId: 2,
+    strength: 50,
+    stock: 4,
+    initialStock: 4,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🍍',
+    gradient: 'from-yellow-400 via-amber-500 to-orange-500',
+    notesUa: 'Багатий нектар зі стиглих тропічних та садових фруктів',
+    notesRu: 'Богатый нектар из спелых тропических и садовых фруктов'
+  },
+
+  // Поличка 3 — CHASER 30 ML LUX (50 MG)
+  {
+    sku: '00314',
+    nameUa: 'Berry Lemonade',
+    nameRu: 'Berry Lemonade',
+    nameSearch: 'берри лимонад ягодный ягідний лимонад berry lemonade',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '🥤',
+    gradient: 'from-pink-500 via-rose-500 to-amber-500',
+    notesUa: 'Іскристий домашній лимонад із малиною та лісовими ягодами',
+    notesRu: 'Искристый домашний лимонад с малиной и лесными ягодами'
+  },
+  {
+    sku: '00315',
+    nameUa: 'Blackberry Lemonade',
+    nameRu: 'Blackberry Lemonade',
+    nameSearch: 'ежевика лимонад ожина blackberry lemonade',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '🍇',
+    gradient: 'from-violet-600 via-purple-600 to-fuchsia-500',
+    notesUa: 'Кисло-солодкий лимонад зі стиглою темною ожиною',
+    notesRu: 'Кисло-сладкий лимонад со спелой темной ежевикой'
+  },
+  {
+    sku: '00316',
+    nameUa: 'Blackberry Pink Guava',
+    nameRu: 'Blackberry Pink Guava',
+    nameSearch: 'ежевика ожина розовая рожева гуава blackberry pink guava',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🌺',
+    gradient: 'from-fuchsia-500 via-pink-500 to-rose-500',
+    notesUa: 'Екзотична рожева гуава в поєднанні з соковитою ожиною',
+    notesRu: 'Экзотическая розовая гуава в сочетании с сочной ежевикой'
+  },
+  {
+    sku: '00317',
+    nameUa: 'Blueberry Mint',
+    nameRu: 'Blueberry Mint',
+    nameSearch: 'черника чорниця мята м’ята голубика лохина blueberry mint',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'mint',
+    emoji: '❄️',
+    gradient: 'from-blue-500 via-indigo-500 to-cyan-400',
+    notesUa: 'Солодка лісова чорниця з прохолодним м’ятним фінішем',
+    notesRu: 'Сладкая лесная черника с прохладным мятным финишем'
+  },
+  {
+    sku: '00320',
+    nameUa: 'Cider Berries',
+    nameRu: 'Cider Berries',
+    nameSearch: 'сидр ягоды ягоди cider berries',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '🍷',
+    gradient: 'from-red-500 via-rose-600 to-purple-600',
+    notesUa: 'Ягідний крафтовий сидр із легкими ігристими нотками',
+    notesRu: 'Ягодный крафтовый сидр с легкими игристыми нотками'
+  },
+  {
+    sku: '00322',
+    nameUa: 'Energetic (Енергетик)',
+    nameRu: 'Energetic (Энергетик)',
+    nameSearch: 'энергетик енергетик ред булл energetic red bull energy',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 3,
+    initialStock: 3,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '⚡',
+    gradient: 'from-blue-500 via-cyan-400 to-amber-400',
+    notesUa: 'Бадьорий смак класичного крижаного енергетика',
+    notesRu: 'Бодрящий вкус классического ледяного энергетика'
+  },
+  {
+    sku: '00323',
+    nameUa: 'Grape Mint',
+    nameRu: 'Grape Mint',
+    nameSearch: 'виноград мята м’ята grape mint',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 1,
+    initialStock: 1,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'mint',
+    emoji: '🍇',
+    gradient: 'from-purple-500 via-violet-500 to-teal-400',
+    notesUa: 'Темний соковитий виноград з освіжаючою перцевою м’ятою',
+    notesRu: 'Темный сочный виноград с освежающей перечной мятой'
+  },
+  {
+    sku: '00325',
+    nameUa: 'Kiwi Passion Fruit Guava',
+    nameRu: 'Kiwi Passion Fruit Guava',
+    nameSearch: 'киви ківі маракуйя маракуя гуава kiwi passion fruit guava',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 3,
+    initialStock: 3,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🥝',
+    gradient: 'from-emerald-400 via-amber-400 to-pink-500',
+    notesUa: 'Легендарне тріо: ківі, ароматна маракуя та солодка гуава',
+    notesRu: 'Легендарное трио: киви, ароматная маракуйя и сладкая гуава'
+  },
+  {
+    sku: '00326',
+    nameUa: 'Mango Nectar',
+    nameRu: 'Mango Nectar',
+    nameSearch: 'манго нектар mango nectar',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 5,
+    initialStock: 5,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🥭',
+    gradient: 'from-amber-400 via-orange-500 to-yellow-500',
+    notesUa: 'Густий медовий нектар зі стиглого королівського манго',
+    notesRu: 'Густой медовый нектар из спелого королевского манго'
+  },
+  {
+    sku: '00334',
+    nameUa: 'Tropic Punch',
+    nameRu: 'Tropic Punch',
+    nameSearch: 'тропик тропік панч пунш tropic punch',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 1, // Було 2 шт., 1 шт. продано Андрію (@pakhaliukA)
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🍹',
+    gradient: 'from-orange-500 via-rose-500 to-pink-500',
+    notesUa: 'Яскравий тропічний пунш із цитрусовими та екзотичними фруктами',
+    notesRu: 'Яркий тропический пунш с цитрусовыми и экзотическими фруктами'
+  },
+  {
+    sku: '00335',
+    nameUa: 'Turbo Mint',
+    nameRu: 'Turbo Mint',
+    nameSearch: 'турбо мята м’ята лед лід холод turbo mint',
+    line: 'LUX (50 MG)',
+    fullLine: 'CHASER 30 ML LUX (50 MG)',
+    shelfId: 3,
+    strength: 50,
+    stock: 10,
+    initialStock: 10,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'mint',
+    emoji: '🧊',
+    gradient: 'from-cyan-300 via-sky-500 to-blue-600',
+    notesUa: 'Абсолютний хіт! Максимальна арктична свіжість солодкої м’яти',
+    notesRu: 'Абсолютный хит! Максимальная арктическая свежесть сладкой мяты'
+  },
+
+  // Поличка 4 — CHASER 30 ML LUX (65 MG)
+  {
+    sku: '00342',
+    nameUa: 'Blueberry Raspberry',
+    nameRu: 'Blueberry Raspberry',
+    nameSearch: 'черника чорниця малина голубика blueberry raspberry',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 1,
+    initialStock: 1,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '🫐',
+    gradient: 'from-indigo-500 via-purple-500 to-pink-500',
+    notesUa: 'Гармонійний дует лісової чорниці та садової малини (65 мг)',
+    notesRu: 'Гармоничный дуэт лесной черники и садовой малины (65 мг)'
+  },
+  {
+    sku: '00343',
+    nameUa: 'Cherry Lemon',
+    nameRu: 'Cherry Lemon',
+    nameSearch: 'вишня лимон черешня cherry lemon',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '🍒',
+    gradient: 'from-red-600 via-rose-500 to-yellow-400',
+    notesUa: 'Стигла рубінова вишня з яскравою лимонною кислинкою (65 мг)',
+    notesRu: 'Спелая рубиновая вишня с яркой лимонной кислинкой (65 мг)'
+  },
+  {
+    sku: '00344',
+    nameUa: 'Cider Berries',
+    nameRu: 'Cider Berries',
+    nameSearch: 'сидр ягоды ягоди cider berries 65',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '🍷',
+    gradient: 'from-rose-600 via-red-600 to-purple-700',
+    notesUa: 'Міцна версія фірмового ягідного сидру з холодком (65 мг)',
+    notesRu: 'Крепкая версия фирменного ягодного сидра с холодком (65 мг)'
+  },
+  {
+    sku: '00346',
+    nameUa: 'Energetic',
+    nameRu: 'Energetic',
+    nameSearch: 'энергетик енергетик ред булл energetic 65',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 6,
+    initialStock: 6,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'drinks',
+    emoji: '⚡',
+    gradient: 'from-sky-400 via-blue-600 to-indigo-600',
+    notesUa: 'Максимальний заряд бадьорості енергетичного напою (65 мг)',
+    notesRu: 'Максимальный заряд бодрости энергетического напитка (65 мг)'
+  },
+  {
+    sku: '00350',
+    nameUa: 'Mango Nectar',
+    nameRu: 'Mango Nectar',
+    nameSearch: 'манго нектар mango nectar 65',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 3,
+    initialStock: 3,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🥭',
+    gradient: 'from-orange-400 via-amber-500 to-red-500',
+    notesUa: 'Насичений тропічний нектар стиглого манго (міцність 65 мг)',
+    notesRu: 'Насыщенный тропический нектар спелого манго (крепость 65 мг)'
+  },
+  {
+    sku: '00354',
+    nameUa: 'Sour Apple',
+    nameRu: 'Sour Apple',
+    nameSearch: 'кислое кисле яблоко яблуко sour apple зеленое',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 4,
+    initialStock: 4,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'fruits',
+    emoji: '🍏',
+    gradient: 'from-lime-400 via-green-500 to-emerald-600',
+    notesUa: 'Яскраве кисле яблуко сорту Гренні Сміт із соковитим ударом (65 мг)',
+    notesRu: 'Яркое кислое яблоко сорта Гренни Смит с сочным ударом (65 мг)'
+  },
+  {
+    sku: '00357',
+    nameUa: 'Strawberry Dragonfruit',
+    nameRu: 'Strawberry Dragonfruit',
+    nameSearch: 'клубника полуниця драгонфрут питайя strawberry dragonfruit',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 1,
+    initialStock: 1,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🐉',
+    gradient: 'from-rose-500 via-fuchsia-500 to-purple-600',
+    notesUa: 'Екзотичний драгонфрут (пітая) та солодка полуниця (65 мг)',
+    notesRu: 'Экзотический драгонфрут (питайя) и сладкая клубника (65 мг)'
+  },
+  {
+    sku: '00358',
+    nameUa: 'Tropic Punch',
+    nameRu: 'Tropic Punch',
+    nameSearch: 'тропик тропік панч пунш tropic punch 65',
+    line: 'LUX (65 MG)',
+    fullLine: 'CHASER 30 ML LUX (65 MG)',
+    shelfId: 4,
+    strength: 65,
+    stock: 1,
+    initialStock: 1,
+    costEur: 5.70,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🌴',
+    gradient: 'from-amber-500 via-orange-500 to-pink-600',
+    notesUa: 'Коктейль із соковитих тропічних фруктів на міцності 65 мг',
+    notesRu: 'Коктейль из сочных тропических фруктов на крепости 65 мг'
+  },
+
+  // Поличка 5 — CHASER F/P 30 ML PLUS (60 MG)
+  {
+    sku: '00472',
+    nameUa: 'Ананас',
+    nameRu: 'Ананас',
+    nameSearch: 'ананас pineapple',
+    line: 'F/P PLUS (60 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (60 MG)',
+    shelfId: 5,
+    strength: 60,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🍍',
+    gradient: 'from-yellow-300 via-amber-400 to-orange-500',
+    notesUa: 'Стиглий кисло-солодкий ананас із соковитою м’якоттю (60 мг)',
+    notesRu: 'Спелый кисло-сладкий ананас с сочной мякотью (60 мг)'
+  },
+  {
+    sku: '00475',
+    nameUa: 'Виноград',
+    nameRu: 'Виноград',
+    nameSearch: 'виноград grape изабелла',
+    line: 'F/P PLUS (60 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (60 MG)',
+    shelfId: 5,
+    strength: 60,
+    stock: 4, // Було 5 шт., 1 шт. продано Сергію (@sksksksks77)
+    initialStock: 5,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '🍇',
+    gradient: 'from-purple-500 via-violet-600 to-indigo-700',
+    notesUa: 'Насичений ароматний темний виноград (60 мг)',
+    notesRu: 'Насыщенный ароматный темный виноград (60 мг)'
+  },
+  {
+    sku: '00478',
+    nameUa: 'Гранат',
+    nameRu: 'Гранат',
+    nameSearch: 'гранат pomegranate',
+    line: 'F/P PLUS (60 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (60 MG)',
+    shelfId: 5,
+    strength: 60,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'fruits',
+    emoji: '🔴',
+    gradient: 'from-red-600 via-rose-600 to-pink-700',
+    notesUa: 'Терпкий рубіновий сік стиглого східного граната (60 мг)',
+    notesRu: 'Терпкий рубиновый сок спелого восточного граната (60 мг)'
+  },
+  {
+    sku: '00487',
+    nameUa: 'Ківі',
+    nameRu: 'Киви',
+    nameSearch: 'киви ківі kiwi',
+    line: 'F/P PLUS (60 MG)',
+    fullLine: 'CHASER F/P 30 ML PLUS (60 MG)',
+    shelfId: 5,
+    strength: 60,
+    stock: 7,
+    initialStock: 7,
+    costEur: 5.30,
+    priceEur: 16.00,
+    category: 'tropical',
+    emoji: '🥝',
+    gradient: 'from-lime-400 via-emerald-500 to-teal-600',
+    notesUa: 'Бестселер лінійки 60 мг! Соковите кисло-солодке зелене ківі',
+    notesRu: 'Бестселлер линейки 60 мг! Сочное кисло-сладкое зеленое киви'
+  },
+
+  // Поличка 6 — CHASER SPECIAL 30 ML (60 MG)
+  {
+    sku: '00822',
+    nameUa: 'Blueberry Mint',
+    nameRu: 'Blueberry Mint',
+    nameSearch: 'черника чорниця мята м’ята blueberry mint special 60',
+    line: 'SPECIAL (60 MG)',
+    fullLine: 'CHASER SPECIAL 30 ML (60 MG)',
+    shelfId: 6,
+    strength: 60,
+    stock: 4,
+    initialStock: 4,
+    costEur: 5.40,
+    priceEur: 16.00,
+    category: 'mint',
+    emoji: '🫐',
+    gradient: 'from-cyan-400 via-blue-500 to-indigo-600',
+    notesUa: 'Спеціальна серія: прохолодна чорниця з м’ятним листом (60 мг)',
+    notesRu: 'Специальная серия: прохладная черника с мятным листом (60 мг)'
+  },
+  {
+    sku: '00823',
+    nameUa: 'Cherries (Вишня-Черешня)',
+    nameRu: 'Cherries (Вишня-Черешня)',
+    nameSearch: 'вишни вишні черешня cherries special 60',
+    line: 'SPECIAL (60 MG)',
+    fullLine: 'CHASER SPECIAL 30 ML (60 MG)',
+    shelfId: 6,
+    strength: 60,
+    stock: 2,
+    initialStock: 2,
+    costEur: 5.40,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '🍒',
+    gradient: 'from-rose-500 via-red-600 to-rose-800',
+    notesUa: 'Мікс садової вишні та солодкої темної черешні (60 мг)',
+    notesRu: 'Микс садовой вишни и сладкой темной черешни (60 мг)'
+  },
+  {
+    sku: '00829',
+    nameUa: 'Strawberry Jelly',
+    nameRu: 'Strawberry Jelly',
+    nameSearch: 'клубничное полуничне желе мармелад strawberry jelly',
+    line: 'SPECIAL (60 MG)',
+    fullLine: 'CHASER SPECIAL 30 ML (60 MG)',
+    shelfId: 6,
+    strength: 60,
+    stock: 1,
+    initialStock: 1,
+    costEur: 5.40,
+    priceEur: 16.00,
+    category: 'sweet',
+    emoji: '🍮',
+    gradient: 'from-pink-500 via-rose-500 to-red-500',
+    notesUa: 'Ніжний десертний смак солодкого полуничного желе (60 мг)',
+    notesRu: 'Нежный десертный вкус сладкого клубничного желе (60 мг)'
+  },
+
+  // Поличка 7 — CHASER YOU&ME LIMITED 30ML (50 MG)
+  {
+    sku: '01312',
+    nameUa: 'Blossom (Limited)',
+    nameRu: 'Blossom (Limited)',
+    nameSearch: 'блоссом цвет цвіт сакура персик лимитка лімітка blossom you&me',
+    line: 'YOU&ME LIMITED (50 MG)',
+    fullLine: 'CHASER YOU&ME LIMITED 30ML (50 MG)',
+    shelfId: 7,
+    strength: 50,
+    stock: 1,
+    initialStock: 1,
+    costEur: 6.40,
+    priceEur: 16.00,
+    category: 'sweet',
+    emoji: '🌸',
+    gradient: 'from-pink-300 via-fuchsia-400 to-rose-500',
+    notesUa: 'Лімітована серія You&Me: ніжний квітково-фруктовий нектар',
+    notesRu: 'Лимитированная серия You&Me: нежный цветочно-фруктовый нектар'
+  },
+  {
+    sku: '01313',
+    nameUa: 'Two Hearts (Limited)',
+    nameRu: 'Two Hearts (Limited)',
+    nameSearch: 'два сердца серця two hearts лимитка лімітка клубника полуниця малина you&me',
+    line: 'YOU&ME LIMITED (50 MG)',
+    fullLine: 'CHASER YOU&ME LIMITED 30ML (50 MG)',
+    shelfId: 7,
+    strength: 50,
+    stock: 2,
+    initialStock: 2,
+    costEur: 6.40,
+    priceEur: 16.00,
+    category: 'berries',
+    emoji: '💞',
+    gradient: 'from-rose-400 via-red-500 to-fuchsia-600',
+    notesUa: 'Лімітована серія You&Me: дует солодких червоних ягід',
+    notesRu: 'Лимитированная серия You&Me: дуэт сладких красных ягод'
+  }
+];
+
+const INITIAL_SALES = [
+  {
+    id: 1,
+    date: '07.11.2026',
+    clientName: 'Сергій',
+    telegram: '@sksksksks77',
+    sku: '00475',
+    productName: 'CHASER F/P 30 ML PLUS (60 MG) — Виноград (00475)',
+    qty: 1,
+    costEur: 5.30,
+    priceEur: 6.00,
+    note: 'Продано за спецціною (€6.00)'
+  },
+  {
+    id: 2,
+    date: '07.11.2026',
+    clientName: 'Андрій',
+    telegram: '@pakhaliukA',
+    sku: '00334',
+    productName: 'CHASER 30 ML LUX (50 MG) — Tropic Punch (00334)',
+    qty: 1,
+    costEur: 5.70,
+    priceEur: 16.00,
+    note: 'Стандартна ціна (€16.00)'
+  }
+];
+
+// Словник перекладів UA (українська) та RU (російська) для клієнтської вітрини
+const TRANSLATIONS = {
+  ua: {
+    inStockHeader: 'Оригінальна продукція • В наявності:',
+    pcs: 'шт.',
+    registerBtn: 'Реєстрація / Кабінет',
+    heroBadge: 'ОРИГІНАЛЬНА ЛІНІЙКА CHASER 30 МЛ • ЄВРОПЕЙСЬКИЙ КАТАЛОГ',
+    heroTitle1: 'Обирай улюблений смак та міцність:',
+    heroTitle2: '50 мг, 60 мг або 65 мг',
+    heroDesc:
+      'Додавай рідини в кошик та оформлюй замовлення — система миттєво сформує твою накладну та перенаправить прямо в наш Telegram (@zhizha_chaiser).',
+    priceBadge: 'Ціна за флакон:',
+    pickupBadge: 'Отримання: Самовивіз або Доставка по Німеччині!',
+    myOrdersBtn: 'Мій кабінет',
+    quickRegBtn: 'Швидка реєстрація покупця',
+    promoSectionTitle: '🔥 Вигідні акції на сети (рахуються в кошику автоматично)',
+    promo1Title: 'Сет «3 флакони за 45€»',
+    promo1Desc: 'Бери будь-які 3 смаки по 15€/шт. замість 16€ — миттєва економія 3€!',
+    promo1Action: 'Вигода -3€',
+    promo2Title: 'Пакет «5 флаконів за 70€»',
+    promo2Desc: 'На компанію або в запас: 5 баночок по 14€/шт. — економія цілих 10€!',
+    promo2Action: 'Вигода -10€',
+    allStrengths: 'Усі міцності',
+    fullCatalog: 'Повний каталог',
+    flavors36: '36 смаків',
+    softVapor: 'М’яка та насичена пара',
+    flavors21: '21 смак',
+    fpAndSpecial: 'F/P Plus & Special',
+    flavors7: '7 смаків',
+    maxStrength: 'Максимальна міцність LUX',
+    flavors8: '8 смаків',
+    searchPlaceholder: 'Пошук смаку (напр., Манго, Ківі, Turbo Mint, Виноград)...',
+    sortPopular: 'За наявністю (хіти зверху)',
+    sortRare: 'Спочатку рідкісні (по 1 шт.)',
+    sortShelf: 'За лінійками (1 → 7)',
+    sortName: 'За алфавітом (А → Я)',
+    noProductsTitle: 'За вашим запитом смаків не знайдено',
+    noProductsDesc: 'Спробуйте скинути фільтри міцності або змінити пошуковий запит.',
+    resetFilters: 'Скинути всі фільтри',
+    codeLabel: 'Код',
+    mgLabel: 'МГ',
+    inStockCard: 'В наявності:',
+    lastOneBadge: 'Остання!',
+    hitBadge: 'Хіт',
+    perBottle: 'за 1 флакон (30 мл)',
+    soldOut: 'Розпродано',
+    addToCart: 'У кошик',
+    footerCopy: '© 2026 CHASER LAB 30 ML • Офіційна вітрина смаків',
+    footerTg: 'Замовлення в Telegram:',
+    ownerBtn: 'Кабінет власника',
+    floatingCartText: 'У кошику',
+    floatingCartSub: 'Знижки враховано • Відправка накладної в @zhizha_chaiser',
+    checkoutBtn: 'Оформити замовлення',
+    cartTitle: 'Ваше замовлення',
+    emptyCartTitle: 'Ваш кошик порожній',
+    emptyCartDesc: 'Додайте улюблені смаки Chaser на вітрині, щоб сформувати накладну.',
+    priceLabel: 'Ціна:',
+    promoUpsell1: '💡 Додайте ще 1 шт., щоб спрацювала акція «3 за 45€» (економія 3€)!',
+    promoUpsell2: '💡 Додайте ще 1 шт., щоб спрацювала акція «5 за 70€» (економія 10€)!',
+    pickupOnlyBannerTitle: '📍 Самовивіз або Доставка по Німеччині!',
+    pickupOnlyBannerDesc:
+      'Обирайте зручний спосіб отримання: забрати особисто (самовивіз) або замовити доставку по Німеччині (усі деталі узгодимо в Telegram).',
+    formHeader: 'Дані для накладної',
+    autoFilled: '✓ З профілю',
+    yourNameLabel: 'Ваше ім’я *',
+    yourNamePlaceholder: 'Напр. Олександр',
+    yourTgLabel: 'Ваш Telegram (@username) *',
+    handoverMethodLabel: 'Спосіб отримання замовлення *',
+    methodPickup: '🏃 Самовивіз (прийду і заберу особисто)',
+    methodGermanyDelivery: '📦 Доставка по Німеччині (узгодимо в Telegram)',
+    commentLabel: 'Коментар до замовлення (за бажанням)',
+    commentPlaceholder: 'Напр., місто доставки або зручний час...',
+    totalBottlesLabel: 'Кількість флаконів:',
+    subtotalLabel: 'Сума без знижки:',
+    bundleDiscountLabel: 'Акційна знижка на сет:',
+    totalToPayLabel: 'РАЗОМ ДО СПЛАТИ:',
+    sendToTelegramBtn: 'Оформити та надіслати в Telegram (@zhizha_chaiser)',
+    clearCartBtn: 'Очистити кошик',
+    invoiceModalTitle: 'Накладну сформовано!',
+    invoiceModalSub: 'Текст скопійовано та готовий до відправки в @zhizha_chaiser',
+    openTgChatBtn: 'Відкрити чат Telegram',
+    openTgAppBtn: 'Відкрити напряму в додатку Telegram',
+    copyAgainBtn: 'Скопіювати текст накладної ще раз',
+    copiedText: 'Текст накладної скопійовано!',
+    accountModalTitle: 'Особистий кабінет покупця',
+    tabProfile: 'Мої дані (Реєстрація)',
+    tabOrders: 'Мої накладні',
+    regInfoText:
+      'Вкажіть лише ім’я, ваш Telegram та зручний спосіб отримання (Самовивіз або Доставка по Німеччині).',
+    saveProfileBtn: 'Зберегти профіль покупця',
+    logoutBtn: 'Вийти',
+    noOrdersYet: 'У вас ще немає оформлених накладних. Додайте смаки в кошик!',
+    reopenInTg: 'Повторно надіслати в Telegram',
+    shelves: [
+      { id: 'all', name: 'Усі лінійки (7 поличок)' },
+      { id: 1, name: 'Поличка 1: F/P PLUS (50 MG)' },
+      { id: 2, name: 'Поличка 2: BL NEW (50 MG)' },
+      { id: 3, name: 'Поличка 3: LUX (50 MG)' },
+      { id: 4, name: 'Поличка 4: LUX (65 MG)' },
+      { id: 5, name: 'Поличка 5: F/P PLUS (60 MG)' },
+      { id: 6, name: 'Поличка 6: SPECIAL (60 MG)' },
+      { id: 7, name: 'Поличка 7: YOU&ME LIMITED (50 MG)' }
+    ],
+    categories: [
+      { id: 'all', label: 'Усі смаки', icon: '✨' },
+      { id: 'tropical', label: 'Тропічні & Манго/Ківі', icon: '🥭' },
+      { id: 'berries', label: 'Ягідні', icon: '🍓' },
+      { id: 'mint', label: 'М’ята & Холод', icon: '🧊' },
+      { id: 'drinks', label: 'Енергетики & Напої', icon: '⚡' },
+      { id: 'fruits', label: 'Яблуко & Гранат', icon: '🍏' },
+      { id: 'sweet', label: 'Солодкі & Limited', icon: '🌸' }
+    ]
+  },
+  ru: {
+    inStockHeader: 'Оригинальная продукция • В наличии:',
+    pcs: 'шт.',
+    registerBtn: 'Регистрация / Кабинет',
+    heroBadge: 'ОРИГИНАЛЬНАЯ ЛИНЕЙКА CHASER 30 МЛ • ЕВРОПЕЙСКИЙ КАТАЛОГ',
+    heroTitle1: 'Выбирай любимый вкус и крепость:',
+    heroTitle2: '50 мг, 60 мг или 65 мг',
+    heroDesc:
+      'Добавляй жидкости в корзину и оформляй заказ — система мгновенно сформирует твою накладную и перенаправит прямо в наш Telegram (@zhizha_chaiser).',
+    priceBadge: 'Цена за флакон:',
+    pickupBadge: 'Получение: Самовывоз или Доставка по Германии!',
+    myOrdersBtn: 'Мой кабинет',
+    quickRegBtn: 'Быстрая регистрация покупателя',
+    promoSectionTitle: '🔥 Выгодные акции на сеты (считаются в корзине автоматически)',
+    promo1Title: 'Сет «3 флакона за 45€»',
+    promo1Desc: 'Бери любые 3 вкуса по 15€/шт. вместо 16€ — мгновенная экономия 3€!',
+    promo1Action: 'Выгода -3€',
+    promo2Title: 'Пакет «5 флаконов за 70€»',
+    promo2Desc: 'На компанию или в запас: 5 баночек по 14€/шт. — экономия целых 10€!',
+    promo2Action: 'Выгода -10€',
+    allStrengths: 'Все крепости',
+    fullCatalog: 'Полный каталог',
+    flavors36: '36 вкусов',
+    softVapor: 'Мягкий и насыщенный пар',
+    flavors21: '21 вкус',
+    fpAndSpecial: 'F/P Plus & Special',
+    flavors7: '7 вкусов',
+    maxStrength: 'Максимальная крепость LUX',
+    flavors8: '8 вкусов',
+    searchPlaceholder: 'Поиск вкуса (напр., Манго, Киви, Turbo Mint, Виноград)...',
+    sortPopular: 'По наличию (хиты сверху)',
+    sortRare: 'Сначала редкие (по 1 шт.)',
+    sortShelf: 'По линейкам (1 → 7)',
+    sortName: 'По алфавиту (А → Я)',
+    noProductsTitle: 'По вашему запросу вкусов не найдено',
+    noProductsDesc: 'Попробуйте сбросить фильтры крепости или изменить поисковый запрос.',
+    resetFilters: 'Сбросить все фильтры',
+    codeLabel: 'Код',
+    mgLabel: 'МГ',
+    inStockCard: 'В наличии:',
+    lastOneBadge: 'Последняя!',
+    hitBadge: 'Хит',
+    perBottle: 'за 1 флакон (30 мл)',
+    soldOut: 'Распродано',
+    addToCart: 'В корзину',
+    footerCopy: '© 2026 CHASER LAB 30 ML • Официальная витрина вкусов',
+    footerTg: 'Заказы в Telegram:',
+    ownerBtn: 'Кабинет владельца',
+    floatingCartText: 'В корзине',
+    floatingCartSub: 'Скидки учтены • Отправка накладной в @zhizha_chaiser',
+    checkoutBtn: 'Оформить заказ',
+    cartTitle: 'Ваш заказ',
+    emptyCartTitle: 'Ваша корзина пуста',
+    emptyCartDesc: 'Добавьте любимые вкусы Chaser на витрине, чтобы сформировать накладную.',
+    priceLabel: 'Цена:',
+    promoUpsell1: '💡 Добавьте ещё 1 шт., чтобы сработала акция «3 за 45€» (экономия 3€)!',
+    promoUpsell2: '💡 Добавьте ещё 1 шт., чтобы сработала акция «5 за 70€» (экономия 10€)!',
+    pickupOnlyBannerTitle: '📍 Самовывоз или Доставка по Германии!',
+    pickupOnlyBannerDesc:
+      'Выбирайте удобный способ получения: забрать лично (самовывоз) или заказать доставку по Германии (все детали согласуем в Telegram).',
+    formHeader: 'Данные для накладной',
+    autoFilled: '✓ Из профиля',
+    yourNameLabel: 'Ваше имя *',
+    yourNamePlaceholder: 'Напр. Александр',
+    yourTgLabel: 'Ваш Telegram (@username) *',
+    handoverMethodLabel: 'Способ получения заказа *',
+    methodPickup: '🏃 Самовывоз (приду и заберу лично)',
+    methodGermanyDelivery: '📦 Доставка по Германии (согласуем в Telegram)',
+    commentLabel: 'Комментарий к заказу (по желанию)',
+    commentPlaceholder: 'Напр., город доставки или удобное время...',
+    totalBottlesLabel: 'Количество флаконов:',
+    subtotalLabel: 'Сумма без скидки:',
+    bundleDiscountLabel: 'Акционная скидка на сет:',
+    totalToPayLabel: 'ИТОГО К ОПЛАТЕ:',
+    sendToTelegramBtn: 'Оформить и отправить в Telegram (@zhizha_chaiser)',
+    clearCartBtn: 'Очистить корзину',
+    invoiceModalTitle: 'Накладная сформирована!',
+    invoiceModalSub: 'Текст скопирован и готов к отправке в @zhizha_chaiser',
+    openTgChatBtn: 'Открыть чат Telegram',
+    openTgAppBtn: 'Открыть напрямую в приложении Telegram',
+    copyAgainBtn: 'Скопировать текст накладной ещё раз',
+    copiedText: 'Текст накладной скопирован!',
+    accountModalTitle: 'Личный кабинет покупателя',
+    tabProfile: 'Мои данные (Регистрация)',
+    tabOrders: 'Мои накладные',
+    regInfoText:
+      'Укажите только имя, ваш Telegram и удобный способ получения (Самовывоз или Доставка по Германии).',
+    saveProfileBtn: 'Сохранить профиль покупателя',
+    logoutBtn: 'Выйти',
+    noOrdersYet: 'У вас ещё нет оформленных накладных. Добавьте вкусы в корзину!',
+    reopenInTg: 'Повторно отправить в Telegram',
+    shelves: [
+      { id: 'all', name: 'Все линейки (7 полочек)' },
+      { id: 1, name: 'Полочка 1: F/P PLUS (50 MG)' },
+      { id: 2, name: 'Полочка 2: BL NEW (50 MG)' },
+      { id: 3, name: 'Полочка 3: LUX (50 MG)' },
+      { id: 4, name: 'Полочка 4: LUX (65 MG)' },
+      { id: 5, name: 'Полочка 5: F/P PLUS (60 MG)' },
+      { id: 6, name: 'Полочка 6: SPECIAL (60 MG)' },
+      { id: 7, name: 'Полочка 7: YOU&ME LIMITED (50 MG)' }
+    ],
+    categories: [
+      { id: 'all', label: 'Все вкусы', icon: '✨' },
+      { id: 'tropical', label: 'Тропические & Манго/Киви', icon: '🥭' },
+      { id: 'berries', label: 'Ягодные', icon: '🍓' },
+      { id: 'mint', label: 'Мята & Холод', icon: '🧊' },
+      { id: 'drinks', label: 'Энергетики & Напитки', icon: '⚡' },
+      { id: 'fruits', label: 'Яблоко & Гранат', icon: '🍏' },
+      { id: 'sweet', label: 'Сладкие & Limited', icon: '🌸' }
+    ]
+  }
+};
+
+export default function App() {
+  // Аутентифікація в хмарі та статус синхронізації
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Мова інтерфейсу для покупців: 'ua' (українська) та 'ru' (російська)
+  const [lang, setLang] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chaser_lang_v4');
+      return saved === 'ru' || saved === 'ua' ? saved : 'ua';
+    } catch {
+      return 'ua';
+    }
+  });
+
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.ua;
+
+  // Авторизація користувача в системі
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error('Помилка підключення хмарної авторизації:', err);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Стан складу та продажів (ініціалізація локальними даними до підключення хмари)
+  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [salesHistory, setSalesHistory] = useState(INITIAL_SALES);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [cloudCustomers, setCloudCustomers] = useState([]);
+
+  // Підписка на оновлення в реальному часі (Real-time Cloud Sync)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Шлях до публічної бази згідно з правилами
+    const inventoryDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', 'main');
+    const salesColRef = collection(db, 'artifacts', appId, 'public', 'data', 'sales');
+    const ordersColRef = collection(db, 'artifacts', appId, 'public', 'data', 'orders');
+    const customersColRef = collection(db, 'artifacts', appId, 'public', 'data', 'customers');
+
+    // 1. Слухач складу реального часу
+    const unsubInventory = onSnapshot(
+      inventoryDocRef,
+      (docSnap) => {
+        if (docSnap.exists() && docSnap.data().items) {
+          setProducts(docSnap.data().items);
+          setIsCloudConnected(true);
+        } else {
+          // Якщо бази ще немає в хмарі — завантажуємо стартові дані
+          setDoc(inventoryDocRef, {
+            items: INITIAL_PRODUCTS,
+            updatedAt: new Date().toISOString()
+          }).catch(() => {});
+          setIsCloudConnected(true);
+        }
+      },
+      (error) => {
+        console.warn('Синхронізація складу тимчасово в локальному режимі:', error);
+        setIsCloudConnected(false);
+      }
+    );
+
+    // 2. Слухач продажів реального часу
+    const unsubSales = onSnapshot(
+      salesColRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map((d) => d.data());
+          list.sort((a, b) => (b.id || 0) - (a.id || 0));
+          setSalesHistory(list);
+        }
+      },
+      (error) => {
+        console.warn('Синхронізація журналу продажів:', error);
+      }
+    );
+
+    // 3. Слухач замовлень
+    const unsubOrders = onSnapshot(
+      ordersColRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => d.data());
+        list.sort((a, b) => (b.id || 0) - (a.id || 0));
+        setPendingOrders(list);
+      },
+      (error) => {
+        console.warn('Синхронізація замовлень:', error);
+      }
+    );
+
+    // 4. Слухач зареєстрованих клієнтів
+    const unsubCustomers = onSnapshot(
+      customersColRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => d.data());
+        setCloudCustomers(list);
+      },
+      (error) => {
+        console.warn('Синхронізація клієнтської бази:', error);
+      }
+    );
+
+    return () => {
+      unsubInventory();
+      unsubSales();
+      unsubOrders();
+      unsubCustomers();
+    };
+  }, [currentUser]);
+
+  // Робочий Telegram за замовчуванням: zhizha_chaiser
+  const [managerTelegram, setManagerTelegram] = useState(() => {
+    try {
+      return localStorage.getItem('chaser_manager_tg_v4') || 'zhizha_chaiser';
+    } catch {
+      return 'zhizha_chaiser';
+    }
+  });
+
+  // PIN-код власника: 7296 (прихований від сторонніх)
+  const [ownerPin, setOwnerPin] = useState(() => {
+    try {
+      return localStorage.getItem('chaser_owner_pin_v4') || '7296';
+    } catch {
+      return '7296';
+    }
+  });
+
+  // Профіль зареєстрованого покупця (на цьому пристрої)
+  const [customerProfile, setCustomerProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chaser_customer_profile_v4');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [customerOrders, setCustomerOrders] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chaser_customer_orders_v4');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Допоміжна функція збереження оновленого складу в хмару
+  const saveProductsToCloud = async (newProductsList) => {
+    setProducts(newProductsList);
+    if (!currentUser) return;
+    try {
+      setIsSyncing(true);
+      const inventoryDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'inventory', 'main');
+      await setDoc(inventoryDocRef, {
+        items: newProductsList,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Помилка запису залишків у хмару:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Режим перегляду: 'store' (Клієнтська вітрина) або 'owner' (Захищений кабінет власника)
+  const [viewMode, setViewMode] = useState('store');
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+
+  // Модальне вікно реєстрації / кабінету покупця
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [accountTab, setAccountTab] = useState('profile');
+  const [regName, setRegName] = useState(customerProfile?.name || '');
+  const [regTelegram, setRegTelegram] = useState(customerProfile?.telegram || '');
+  const [regHandover, setRegHandover] = useState(customerProfile?.handover || 'pickup');
+
+  // Фільтри каталогу
+  const [selectedStrength, setSelectedStrength] = useState('all');
+  const [selectedShelf, setSelectedShelf] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('popular');
+
+  // Стан кошика клієнта
+  const [cart, setCart] = useState([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  const [checkoutName, setCheckoutName] = useState(customerProfile?.name || '');
+  const [checkoutTelegram, setCheckoutTelegram] = useState(customerProfile?.telegram || '');
+  const [checkoutHandover, setCheckoutHandover] = useState(customerProfile?.handover || 'pickup');
+  const [checkoutComment, setCheckoutComment] = useState('');
+
+  // Модальне вікно готової накладної для відправки в Telegram
+  const [createdInvoiceModal, setCreatedInvoiceModal] = useState(null);
+  const [copiedInvoice, setCopiedInvoice] = useState(false);
+  const [copiedPricelist, setCopiedPricelist] = useState(false);
+
+  // Форма ручного проведення продажу в кабінеті власника
+  const [manualSaleSku, setManualSaleSku] = useState('00335');
+  const [manualSaleQty, setManualSaleQty] = useState(1);
+  const [manualSalePriceEur, setManualSalePriceEur] = useState(16.00);
+  const [manualSaleClient, setManualSaleClient] = useState('');
+  const [manualSaleTg, setManualSaleTg] = useState('');
+  const [manualSaleNote, setManualSaleNote] = useState('');
+
+  // Сповіщення (тост)
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (customerProfile) {
+      setCheckoutName(customerProfile.name || '');
+      setCheckoutTelegram(customerProfile.telegram || '');
+      setCheckoutHandover(customerProfile.handover || 'pickup');
+      setRegName(customerProfile.name || '');
+      setRegTelegram(customerProfile.telegram || '');
+      setRegHandover(customerProfile.handover || 'pickup');
+    }
+  }, [customerProfile]);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.message === message ? null : prev));
+    }, 3200);
+  };
+
+  // Безпечне копіювання в буфер обміну з резервним методом для будь-яких браузерів
+  const safeCopyToClipboard = (text) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (copied) return;
+    } catch {}
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+  };
+
+  const getProductName = (p) => (lang === 'ua' ? p.nameUa || p.nameRu : p.nameRu);
+  const getProductNotes = (p) => (lang === 'ua' ? p.notesUa || p.notesRu : p.notesRu);
+
+  // Підрахунок кількості баночок за міцністю в реальному часі
+  const strengthCounts = useMemo(() => {
+    const counts = { all: 0, 50: 0, 60: 0, 65: 0 };
+    products.forEach((p) => {
+      counts.all += p.stock;
+      if (counts[p.strength] !== undefined) {
+        counts[p.strength] += p.stock;
+      }
+    });
+    return counts;
+  }, [products]);
+
+  // Фільтрація та сортування товарів для вітрини
+  const filteredProducts = useMemo(() => {
+    return products
+      .filter((product) => {
+        if (selectedStrength !== 'all' && product.strength !== Number(selectedStrength)) {
+          return false;
+        }
+        if (selectedShelf !== 'all' && product.shelfId !== Number(selectedShelf)) {
+          return false;
+        }
+        if (selectedCategory !== 'all' && product.category !== selectedCategory) {
+          return false;
+        }
+        if (searchQuery.trim() !== '') {
+          const q = searchQuery.toLowerCase().trim();
+          const matchUa = (product.nameUa || '').toLowerCase().includes(q);
+          const matchRu = (product.nameRu || '').toLowerCase().includes(q);
+          const matchSearch = product.nameSearch.toLowerCase().includes(q);
+          const matchSku = product.sku.toLowerCase().includes(q);
+          const matchLine = product.line.toLowerCase().includes(q);
+          return matchUa || matchRu || matchSearch || matchSku || matchLine;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'popular') return b.stock - a.stock;
+        if (sortBy === 'rare') {
+          if (a.stock === 0 && b.stock > 0) return 1;
+          if (b.stock === 0 && a.stock > 0) return -1;
+          return a.stock - b.stock;
+        }
+        if (sortBy === 'name') return getProductName(a).localeCompare(getProductName(b));
+        if (sortBy === 'shelf') return a.shelfId - b.shelfId;
+        return 0;
+      });
+  }, [products, selectedStrength, selectedShelf, selectedCategory, searchQuery, sortBy, lang]);
+
+  // Функції роботи з клієнтським кошиком
+  const getCartQty = (sku) => {
+    const item = cart.find((i) => i.sku === sku);
+    return item ? item.qty : 0;
+  };
+
+  const addToCart = (product) => {
+    const currentQty = getCartQty(product.sku);
+    const pName = getProductName(product);
+    if (currentQty >= product.stock) {
+      showToast(
+        lang === 'ua'
+          ? `На складі залишилось тільки ${product.stock} шт. смаку «${pName}»!`
+          : `На складе осталось только ${product.stock} шт. вкуса «${pName}»!`,
+        'warning'
+      );
+      return;
+    }
+    setCart((prev) => {
+      const existing = prev.find((i) => i.sku === product.sku);
+      if (existing) {
+        return prev.map((i) =>
+          i.sku === product.sku ? { ...i, qty: i.qty + 1 } : i
+        );
+      }
+      return [...prev, { sku: product.sku, qty: 1 }];
+    });
+    showToast(
+      lang === 'ua'
+        ? `Додано в кошик: ${pName} (${product.strength} мг) — €16.00`
+        : `Добавлено в корзину: ${pName} (${product.strength} мг) — €16.00`
+    );
+  };
+
+  const updateCartQty = (sku, delta) => {
+    const product = products.find((p) => p.sku === sku);
+    if (!product) return;
+
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.sku !== sku) return item;
+          const nextQty = item.qty + delta;
+          if (nextQty > product.stock) {
+            showToast(
+              lang === 'ua'
+                ? `Максимальний залишок в наявності: ${product.stock} шт.`
+                : `Максимальный остаток в наличии: ${product.stock} шт.`,
+              'warning'
+            );
+            return item;
+          }
+          return { ...item, qty: nextQty };
+        })
+        .filter((item) => item.qty > 0)
+    );
+  };
+
+  const removeFromCart = (sku) => {
+    setCart((prev) => prev.filter((i) => i.sku !== sku));
+  };
+
+  const clearCart = () => {
+    setCart([]);
+  };
+
+  // Автоматичний розрахунок кошика та акційних знижок (Сет 3 за 45€ та Пакет 5 за 70€)
+  const cartDetails = useMemo(() => {
+    const items = cart
+      .map((cartItem) => {
+        const product = products.find((p) => p.sku === cartItem.sku);
+        if (!product) return null;
+        const unitPrice = 16.00;
+        const subtotalEur = cartItem.qty * unitPrice;
+        return {
+          ...product,
+          qty: cartItem.qty,
+          unitPrice,
+          subtotalEur
+        };
+      })
+      .filter(Boolean);
+
+    const totalBottles = items.reduce((acc, i) => acc + i.qty, 0);
+    const baseTotalEur = items.reduce((acc, i) => acc + i.subtotalEur, 0);
+
+    // Автоматичний розрахунок сетових знижок:
+    // Кожні 5 шт. дають знижку 10€ (70€ замість 80€)
+    // Кожні 3 шт. із залишку дають знижку 3€ (45€ замість 48€)
+    let rem = totalBottles;
+    const count5 = Math.floor(rem / 5);
+    rem = rem % 5;
+    const count3 = Math.floor(rem / 3);
+    const bundleDiscountEur = count5 * 10 + count3 * 3;
+
+    const totalDiscountEur = bundleDiscountEur;
+    const totalEur = Math.max(0, baseTotalEur - totalDiscountEur);
+
+    return {
+      items,
+      totalBottles,
+      baseTotalEur,
+      bundleDiscountEur,
+      totalDiscountEur,
+      totalEur
+    };
+  }, [cart, products]);
+
+  // Збереження профілю покупця з миттєвим записом у хмару
+  const handleSaveCustomerProfile = async (e) => {
+    e.preventDefault();
+    if (!regName.trim() || !regTelegram.trim()) {
+      showToast(
+        lang === 'ua'
+          ? 'Будь ласка, вкажіть ваше ім’я та нікнейм у Telegram!'
+          : 'Пожалуйста, укажите ваше имя и никнейм в Telegram!',
+        'warning'
+      );
+      return;
+    }
+    const cleanTg = regTelegram.trim().startsWith('@')
+      ? regTelegram.trim()
+      : `@${regTelegram.trim()}`;
+
+    const profile = {
+      name: regName.trim(),
+      telegram: cleanTg,
+      handover: regHandover,
+      registeredAt: new Date().toLocaleDateString('ru-RU')
+    };
+
+    setCustomerProfile(profile);
+    setIsAccountModalOpen(false);
+
+    // Зберігаємо нового покупця в хмарну базу клієнтів
+    if (currentUser) {
+      try {
+        const customerDocId = cleanTg.replace(/[^a-zA-Z0-9_]/g, '') || `cust_${Date.now()}`;
+        const custDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerDocId);
+        await setDoc(custDocRef, {
+          name: profile.name,
+          telegram: profile.telegram,
+          handover: profile.handover,
+          registeredAt: profile.registeredAt,
+          userId: currentUser.uid
+        });
+      } catch (err) {
+        console.error('Помилка збереження покупця в хмару:', err);
+      }
+    }
+
+    showToast(
+      lang === 'ua'
+        ? `Ласкаво просимо, ${profile.name}! Дані збережено в системі.`
+        : `Добро пожаловать, ${profile.name}! Данные сохранены в системе.`
+    );
+  };
+
+  // Формування клієнтської накладної, АВТОМАТИЧНЕ СПИСАННЯ товару та збереження в хмару
+  const handleCustomerCheckoutToTelegram = async (e) => {
+    e.preventDefault();
+    if (cartDetails.items.length === 0) return;
+
+    if (!checkoutName.trim() || !checkoutTelegram.trim()) {
+      showToast(
+        lang === 'ua'
+          ? 'Вкажіть ваше ім’я та Telegram для оформлення накладної!'
+          : 'Укажите ваше имя и Telegram для оформления накладной!',
+        'warning'
+      );
+      return;
+    }
+
+    // Перевірка наявності товару перед списанням
+    for (const cartItem of cartDetails.items) {
+      const currentProd = products.find((p) => p.sku === cartItem.sku);
+      if (!currentProd || currentProd.stock < cartItem.qty) {
+        showToast(
+          lang === 'ua'
+            ? `Недостатньо залишку для «${getProductName(cartItem)}» (залишилось ${currentProd?.stock || 0} шт.)`
+            : `Недостаточно остатка для «${getProductName(cartItem)}» (осталось ${currentProd?.stock || 0} шт.)`,
+          'warning'
+        );
+        return;
+      }
+    }
+
+    const formattedTg = checkoutTelegram.trim().startsWith('@')
+      ? checkoutTelegram.trim()
+      : `@${checkoutTelegram.trim()}`;
+
+    const updatedProfile = {
+      name: checkoutName.trim(),
+      telegram: formattedTg,
+      handover: checkoutHandover,
+      registeredAt: customerProfile?.registeredAt || new Date().toLocaleDateString('ru-RU')
+    };
+    setCustomerProfile(updatedProfile);
+
+    const invoiceNumber = `INV-${String(salesHistory.length + pendingOrders.length + 101).padStart(4, '0')}`;
+    const orderDate = new Date().toLocaleDateString('ru-RU');
+
+    const handoverTextUa =
+      checkoutHandover === 'pickup'
+        ? '🏃 Самовивіз (заберу особисто)'
+        : '📦 Доставка по Німеччині';
+    const handoverTextRu =
+      checkoutHandover === 'pickup'
+        ? '🏃 Самовывоз (заберу лично)'
+        : '📦 Доставка по Германии';
+
+    const invoiceLines =
+      lang === 'ua'
+        ? [
+            `🧾 НАКЛАДНА ЗАМОВЛЕННЯ #${invoiceNumber}`,
+            `📅 Дата: ${orderDate}`,
+            `👤 Покупець: ${updatedProfile.name} (${updatedProfile.telegram})`,
+            `📍 Отримання: ${handoverTextUa}`,
+            checkoutComment.trim() ? `💬 Коментар: ${checkoutComment.trim()}` : null,
+            `────────────────────────`,
+            `📦 СКЛАД ЗАМОВЛЕННЯ:`
+          ].filter(Boolean)
+        : [
+            `🧾 НАКЛАДНАЯ ЗАКАЗА #${invoiceNumber}`,
+            `📅 Дата: ${orderDate}`,
+            `👤 Покупатель: ${updatedProfile.name} (${updatedProfile.telegram})`,
+            `📍 Получение: ${handoverTextRu}`,
+            checkoutComment.trim() ? `💬 Комментарий: ${checkoutComment.trim()}` : null,
+            `────────────────────────`,
+            `📦 СОСТАВ ЗАКАЗА:`
+          ].filter(Boolean);
+
+    cartDetails.items.forEach((item, idx) => {
+      const displayTitle = getProductName(item);
+      invoiceLines.push(
+        `${idx + 1}. ${item.line} — ${displayTitle} (${item.strength} MG) [SKU: ${item.sku}]\n   ${item.qty} × €${item.unitPrice.toFixed(2)} = €${item.subtotalEur.toFixed(2)}`
+      );
+    });
+
+    invoiceLines.push(`────────────────────────`);
+    if (cartDetails.bundleDiscountEur > 0) {
+      invoiceLines.push(
+        lang === 'ua'
+          ? `🔥 Акційна знижка на сет: -€${cartDetails.bundleDiscountEur.toFixed(2)}`
+          : `🔥 Акционная скидка на сет: -€${cartDetails.bundleDiscountEur.toFixed(2)}`
+      );
+    }
+    invoiceLines.push(
+      lang === 'ua'
+        ? `🧪 Усього флаконів: ${cartDetails.totalBottles} шт.`
+        : `🧪 Всего флаконов: ${cartDetails.totalBottles} шт.`
+    );
+    invoiceLines.push(
+      lang === 'ua'
+        ? `💶 РАЗОМ ДО СПЛАТИ: €${cartDetails.totalEur.toFixed(2)}`
+        : `💶 ИТОГО К ОПЛАТЕ: €${cartDetails.totalEur.toFixed(2)}`
+    );
+
+    const invoiceText = invoiceLines.join('\n');
+    const cleanManager = managerTelegram.replace('@', '').trim() || 'zhizha_chaiser';
+    const tgWebUrl = `https://t.me/${cleanManager}?text=${encodeURIComponent(invoiceText)}`;
+    const tgAppUrl = `tg://resolve?domain=${cleanManager}&text=${encodeURIComponent(invoiceText)}`;
+
+    const effectiveUnitPrice =
+      cartDetails.totalBottles > 0
+        ? cartDetails.totalEur / cartDetails.totalBottles
+        : 16.00;
+
+    // 1. АВТОМАТИЧНЕ СПИСАННЯ ТОВАРУ ЗІ СКЛАДУ
+    const updatedProducts = products.map((prod) => {
+      const orderedItem = cartDetails.items.find((i) => i.sku === prod.sku);
+      if (orderedItem) {
+        return {
+          ...prod,
+          stock: Math.max(0, prod.stock - orderedItem.qty)
+        };
+      }
+      return prod;
+    });
+
+    // Миттєво синхронізуємо залишки в хмарі для всіх користувачів
+    await saveProductsToCloud(updatedProducts);
+
+    // 2. Створюємо запис замовлення та продажів
+    const newOrderObj = {
+      id: invoiceNumber,
+      date: orderDate,
+      clientName: updatedProfile.name,
+      telegram: updatedProfile.telegram,
+      handover: checkoutHandover === 'pickup' ? 'Самовивіз' : 'Доставка по Німеччині',
+      comment: checkoutComment.trim(),
+      items: cartDetails.items.map((i) => ({
+        sku: i.sku,
+        name: i.nameUa || i.nameRu,
+        line: i.line,
+        fullLine: i.fullLine,
+        strength: i.strength,
+        qty: i.qty,
+        priceEur: effectiveUnitPrice,
+        costEur: i.costEur
+      })),
+      totalBottles: cartDetails.totalBottles,
+      totalDiscountEur: cartDetails.totalDiscountEur,
+      totalEur: cartDetails.totalEur,
+      invoiceText,
+      status: 'confirmed'
+    };
+
+    setCustomerOrders((prev) => [newOrderObj, ...prev]);
+
+    // 3. Зберігаємо замовлення та клієнта в хмарі
+    if (currentUser) {
+      try {
+        const orderDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'orders', invoiceNumber);
+        await setDoc(orderDocRef, newOrderObj);
+
+        // Додаємо кожну продану позицію в журнал продажів
+        for (const item of newOrderObj.items) {
+          const saleId = `sale_${Date.now()}_${item.sku}`;
+          const saleDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'sales', saleId);
+          await setDoc(saleDocRef, {
+            id: salesHistory.length + 1,
+            date: orderDate,
+            clientName: updatedProfile.name,
+            telegram: updatedProfile.telegram,
+            sku: item.sku,
+            productName: `${item.fullLine} — ${item.name} (${item.sku})`,
+            qty: item.qty,
+            costEur: item.costEur,
+            priceEur: item.priceEur,
+            note: `Замовлення #${invoiceNumber} (${updatedProfile.handover === 'pickup' ? 'Самовивіз' : 'Доставка'})`
+          });
+        }
+
+        // Оновлюємо інформацію в базі клієнтів
+        const customerDocId = formattedTg.replace(/[^a-zA-Z0-9_]/g, '') || `cust_${Date.now()}`;
+        const custDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerDocId);
+        await setDoc(
+          custDocRef,
+          {
+            name: updatedProfile.name,
+            telegram: formattedTg,
+            handover: updatedProfile.handover,
+            lastOrderDate: orderDate
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error('Помилка запису замовлення в хмару:', err);
+      }
+    }
+
+    safeCopyToClipboard(invoiceText);
+
+    setCreatedInvoiceModal({
+      ...newOrderObj,
+      tgWebUrl,
+      tgAppUrl
+    });
+
+    clearCart();
+    setCheckoutComment('');
+    setIsCartOpen(false);
+
+    showToast(
+      lang === 'ua'
+        ? `Замовлення оформлено! Списано ${cartDetails.totalBottles} шт. зі складу.`
+        : `Заказ оформлен! Списано ${cartDetails.totalBottles} шт. со склада.`
+    );
+
+    try {
+      window.open(tgWebUrl, '_blank', 'noopener,noreferrer');
+    } catch {}
+  };
+
+  // Авторизація власника за PIN-кодом 7296
+  const openOwnerPanel = () => {
+    if (isOwnerAuthenticated) {
+      setViewMode('owner');
+    } else {
+      setPinInput('');
+      setPinError('');
+      setIsPinModalOpen(true);
+    }
+  };
+
+  const handleVerifyPin = (e) => {
+    e.preventDefault();
+    if (pinInput.trim() === ownerPin) {
+      setIsOwnerAuthenticated(true);
+      setIsPinModalOpen(false);
+      setViewMode('owner');
+      showToast('Вхід у Кабінет власника виконано!');
+    } else {
+      setPinError('Невірний PIN-код доступу!');
+    }
+  };
+
+  // Фінансова аналітика для Кабінету власника (виключно в євро €)
+  const ownerStats = useMemo(() => {
+    const goodsCostEur = 555.60;
+    const deliveryCostEur = 30.00;
+    const simCardCostEur = 9.71;
+    const totalExpensesEur = goodsCostEur + deliveryCostEur + simCardCostEur; // €595.31
+
+    const soldBottles = salesHistory.reduce((acc, s) => acc + s.qty, 0);
+    const actualRevenueEur = salesHistory.reduce(
+      (acc, s) => acc + s.qty * s.priceEur,
+      0
+    );
+    const actualCogsEur = salesHistory.reduce(
+      (acc, s) => acc + s.qty * s.costEur,
+      0
+    );
+    const actualGrossProfitEur = actualRevenueEur - actualCogsEur;
+
+    const remainingBottles = products.reduce((acc, p) => acc + p.stock, 0);
+    const remainingPotentialRevenueEur = remainingBottles * 16.00;
+    const projectedTotalRevenueEur = actualRevenueEur + remainingPotentialRevenueEur;
+    const projectedNetProfitEur = projectedTotalRevenueEur - totalExpensesEur;
+
+    const currentCashBalanceEur = actualRevenueEur - totalExpensesEur;
+    const bottlesToBreakEven =
+      currentCashBalanceEur < 0
+        ? Math.ceil(Math.abs(currentCashBalanceEur) / 16.00)
+        : 0;
+
+    // Групування клієнтів для CRM власника
+    const clientsMap = {};
+    salesHistory.forEach((s) => {
+      const key = (s.telegram || s.clientName || 'Клієнт').toLowerCase();
+      if (!clientsMap[key]) {
+        clientsMap[key] = {
+          clientName: s.clientName,
+          telegram: s.telegram,
+          totalQty: 0,
+          totalSpentEur: 0,
+          totalProfitEur: 0,
+          purchases: []
+        };
+      }
+      const rev = s.qty * s.priceEur;
+      const prof = rev - s.qty * s.costEur;
+      clientsMap[key].totalQty += s.qty;
+      clientsMap[key].totalSpentEur += rev;
+      clientsMap[key].totalProfitEur += prof;
+      clientsMap[key].purchases.push(
+        `${s.productName} (${s.qty} шт. × €${s.priceEur.toFixed(2)})`
+      );
+    });
+
+    return {
+      goodsCostEur,
+      deliveryCostEur,
+      simCardCostEur,
+      totalExpensesEur,
+      soldBottles,
+      actualRevenueEur,
+      actualGrossProfitEur,
+      remainingBottles,
+      projectedTotalRevenueEur,
+      projectedNetProfitEur,
+      currentCashBalanceEur,
+      bottlesToBreakEven,
+      clientsList: Object.values(clientsMap)
+    };
+  }, [products, salesHistory]);
+
+  // Ручне додавання продажу власником за будь-якою ціною (€6, €10, €16)
+  const handleManualOwnerSale = async (e) => {
+    e.preventDefault();
+    const product = products.find((p) => p.sku === manualSaleSku);
+    if (!product) return;
+
+    const qty = Number(manualSaleQty);
+    const price = Number(manualSalePriceEur);
+
+    if (qty <= 0 || qty > product.stock) {
+      showToast(
+        `Неможливо списати ${qty} шт. В наявності тільки ${product.stock} шт.!`,
+        'warning'
+      );
+      return;
+    }
+
+    const updated = products.map((p) =>
+      p.sku === product.sku ? { ...p, stock: p.stock - qty } : p
+    );
+
+    await saveProductsToCloud(updated);
+
+    const saleDate = new Date().toLocaleDateString('ru-RU');
+    const clientName = manualSaleClient.trim() || 'Покупець';
+    const clientTg = manualSaleTg.trim()
+      ? manualSaleTg.trim().startsWith('@')
+        ? manualSaleTg.trim()
+        : `@${manualSaleTg.trim()}`
+      : '—';
+
+    const newSale = {
+      id: salesHistory.length + 1,
+      date: saleDate,
+      clientName,
+      telegram: clientTg,
+      sku: product.sku,
+      productName: `${product.fullLine} — ${product.nameUa} (${product.sku})`,
+      qty,
+      costEur: product.costEur,
+      priceEur: price,
+      note: manualSaleNote.trim() || `Ціна €${price.toFixed(2)}`
+    };
+
+    setSalesHistory((prev) => [newSale, ...prev]);
+
+    if (currentUser) {
+      try {
+        const saleDocRef = doc(
+          db,
+          'artifacts',
+          appId,
+          'public',
+          'data',
+          'sales',
+          `sale_manual_${Date.now()}`
+        );
+        await setDoc(saleDocRef, newSale);
+      } catch (err) {
+        console.error('Помилка збереження ручного продажу:', err);
+      }
+    }
+
+    setManualSaleClient('');
+    setManualSaleTg('');
+    setManualSaleNote('');
+    showToast(
+      `Продаж проведено: ${product.nameUa} (${qty} шт. по €${price.toFixed(2)})`
+    );
+  };
+
+  // Скидання бази до початкового стану (98 шт., Сергій та Андрій)
+  const handleResetToInitialState = async () => {
+    await saveProductsToCloud(INITIAL_PRODUCTS);
+    setSalesHistory(INITIAL_SALES);
+    setPendingOrders([]);
+    showToast('Базу відновлено до початкового стану (98 шт. на складі)!');
+  };
+
+  // Генерація текстового прайс-листа для Telegram (з акціями та @zhizha_chaiser)
+  const handleCopyTelegramPricelist = () => {
+    const available = products.filter((p) => p.stock > 0);
+    const by50 = available.filter((p) => p.strength === 50);
+    const by60 = available.filter((p) => p.strength === 60);
+    const by65 = available.filter((p) => p.strength === 65);
+
+    const text = [
+      `🔥 В НАЛИЧИИ / В НАЯВНОСТІ: CHASER 30 ML (${strengthCounts.all} шт.) 🔥`,
+      `💶 Цена / Ціна: 16.00€ / шт.`,
+      `🎁 АКЦИИ НА СЕТЫ:`,
+      `• 3 флакона = 45€ (по 15€/шт. — экономия 3€!)`,
+      `• 5 флаконов = 70€ (по 14€/шт. — экономия 10€!)`,
+      `📍 Получение: Самовывоз или Доставка по Германии!`,
+      ``,
+      `💨 КРЕПОСТЬ 50 МГ (${strengthCounts[50]} шт.):`,
+      ...by50.map(
+        (p) =>
+          `• ${p.emoji} ${p.nameRu} [${p.line}] — ${
+            p.stock === 1 ? '🔥 ПОСЛЕДНЯЯ 1 шт.!' : `${p.stock} шт.`
+          }`
+      ),
+      ``,
+      `⚡ КРЕПОСТЬ 60 МГ (${strengthCounts[60]} шт.):`,
+      ...by60.map(
+        (p) =>
+          `• ${p.emoji} ${p.nameRu} [${p.line}] — ${
+            p.stock === 1 ? '🔥 ПОСЛЕДНЯЯ 1 шт.!' : `${p.stock} шт.`
+          }`
+      ),
+      ``,
+      `🚀 КРЕПОСТЬ 65 МГ (${strengthCounts[65]} шт.):`,
+      ...by65.map(
+        (p) =>
+          `• ${p.emoji} ${p.nameRu} [${p.line}] — ${
+            p.stock === 1 ? '🔥 ПОСЛЕДНЯЯ 1 шт.!' : `${p.stock} шт.`
+          }`
+      ),
+      ``,
+      `📩 Для заказа пиши в Telegram: @${managerTelegram.replace('@', '')}`
+    ].join('\n');
+
+    safeCopyToClipboard(text);
+    setCopiedPricelist(true);
+    showToast('Актуальний прайс-лист скопійовано!');
+    setTimeout(() => setCopiedPricelist(false), 2500);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+      {/* Фонові неонові градієнти */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 left-1/3 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl" />
+      </div>
+
+      {/* Спливаюче повідомлення */}
+      {toast && (
+        <div className="fixed top-20 right-4 z-50 max-w-sm animate-bounce">
+          <div
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border backdrop-blur-md ${
+              toast.type === 'warning'
+                ? 'bg-amber-950/90 border-amber-500/50 text-amber-200'
+                : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+            }`}
+          >
+            {toast.type === 'warning' ? (
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            )}
+            <span className="text-xs sm:text-sm font-bold">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ВЕРХНЯ НАВІГАЦІЙНА ПАНЕЛЬ */}
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-slate-950/85 border-b border-slate-800/80 px-4 sm:px-6 py-3.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+          {/* Логотип */}
+          <div
+            onClick={() => setViewMode('store')}
+            className="flex items-center gap-3 cursor-pointer group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition">
+              <Flame className="w-6 h-6 text-slate-950 fill-slate-950" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-lg sm:text-xl tracking-tight text-white">
+                  CHASER <span className="text-emerald-400">LAB</span>
+                </span>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  30 ML
+                </span>
+                {/* Індикатор хмарної синхронізації реального часу */}
+                <div
+                  title={
+                    isCloudConnected
+                      ? 'Хмарна база підключена: оновлення в реальному часі'
+                      : 'Підключення до хмари...'
+                  }
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900 border border-slate-800"
+                >
+                  {isCloudConnected ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <Cloud className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-300 hidden md:inline">Online</span>
+                    </>
+                  ) : (
+                    <>
+                      <CloudOff className="w-3 h-3 text-amber-400" />
+                      <span className="text-amber-300 hidden md:inline">Локально</span>
+                    </>
+                  )}
+                  {isSyncing && <RefreshCw className="w-2.5 h-2.5 text-cyan-400 animate-spin ml-0.5" />}
+                </div>
+              </div>
+              <p className="text-xs text-slate-400">
+                {t.inStockHeader}{' '}
+                <strong className="text-emerald-400">
+                  {strengthCounts.all} {t.pcs}
+                </strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Права частина шапки: Перемикач мови UA/RU, Кабінет покупця, Telegram @zhizha_chaiser, Кошик */}
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+            {/* Перемикач мови UA / RU */}
+            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <Globe className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-1 hidden sm:block" />
+              <button
+                onClick={() => setLang('ua')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition ${
+                  lang === 'ua'
+                    ? 'bg-emerald-500 text-slate-950 shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                UA
+              </button>
+              <button
+                onClick={() => setLang('ru')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition ${
+                  lang === 'ru'
+                    ? 'bg-emerald-500 text-slate-950 shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                RU
+              </button>
+            </div>
+
+            {/* Якщо власник авторизований — швидке перемикання */}
+            {isOwnerAuthenticated && (
+              <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => setViewMode('store')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                    viewMode === 'store'
+                      ? 'bg-emerald-500 text-slate-950'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Вітрина
+                </button>
+                <button
+                  onClick={() => setViewMode('owner')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                    viewMode === 'owner'
+                      ? 'bg-violet-500 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>Власник</span>
+                  {pendingOrders.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px]">
+                      {pendingOrders.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Кнопка Реєстрації / Особистого кабінету покупця */}
+            <button
+              onClick={() => {
+                setAccountTab('profile');
+                setIsAccountModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs sm:text-sm font-semibold text-slate-200 transition"
+            >
+              <User className="w-4 h-4 text-cyan-400" />
+              <span className="hidden md:inline">
+                {customerProfile ? customerProfile.name : t.registerBtn}
+              </span>
+              {customerOrders.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">
+                  {customerOrders.length}
+                </span>
+              )}
+            </button>
+
+            {/* Пряма кнопка на Telegram-магазин @zhizha_chaiser */}
+            <a
+              href={`https://t.me/${managerTelegram.replace('@', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-xs sm:text-sm font-bold transition"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>@{managerTelegram.replace('@', '')}</span>
+            </a>
+
+            {/* Кнопка Кошика в Євро */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-500/20 transition"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>€{cartDetails.totalEur.toFixed(2)}</span>
+              <span className="px-2 py-0.5 rounded-full bg-slate-950/90 text-emerald-300 text-xs font-black">
+                {cartDetails.totalBottles}
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ОСНОВНИЙ ВМІСТ */}
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+        {viewMode === 'store' ? (
+          <>
+            {/* HERO-БАНЕР МАГАЗИНУ */}
+            <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900/95 to-emerald-950/60 border border-slate-800/90 p-5 sm:p-7 mb-6 shadow-2xl">
+              <div className="max-w-3xl space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{t.heroBadge}</span>
+                </div>
+                <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
+                  {t.heroTitle1}{' '}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">
+                    {t.heroTitle2}
+                  </span>
+                </h1>
+                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-2xl">
+                  {t.heroDesc}
+                </p>
+
+                {/* Швидкі бейджі переваг: Ціна €16, Самовивіз або Доставка по Німеччині */}
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-semibold text-slate-200">
+                    <Euro className="w-4 h-4 text-emerald-400" />
+                    <span>
+                      {t.priceBadge} <strong className="text-white">€16.00</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-300">
+                    <Truck className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>{t.pickupBadge}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAccountTab(customerOrders.length > 0 ? 'orders' : 'profile');
+                      setIsAccountModalOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-xs font-bold text-cyan-300 transition"
+                  >
+                    <ClipboardList className="w-4 h-4 text-cyan-400" />
+                    <span>
+                      {customerProfile
+                        ? `${t.myOrdersBtn} (${customerOrders.length})`
+                        : t.quickRegBtn}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* ІНТЕРАКТИВНИЙ БЛОК АКЦІЙ НА СЕТИ (2 КАРТКИ БЕЗ ПРОМОКОДУ FRIEND2) */}
+            <section className="mb-8">
+              <div className="flex items-center gap-2 mb-3">
+                <Gift className="w-4 h-4 text-emerald-400" />
+                <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-300">
+                  {t.promoSectionTitle}
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* Акція 1: 3 флакони за 45€ */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/30 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-sm font-black text-white">{t.promo1Title}</span>
+                      <span className="px-2 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-black">
+                        {t.promo1Action}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">{t.promo1Desc}</p>
+                  </div>
+                  <div className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>
+                      {lang === 'ua'
+                        ? 'Спрацьовує автоматично при виборі 3 шт.'
+                        : 'Срабатывает автоматически при выборе 3 шт.'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Акція 2: 5 флаконів за 70€ */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/40 border border-cyan-500/30 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-sm font-black text-white">{t.promo2Title}</span>
+                      <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[11px] font-black">
+                        {t.promo2Action}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">{t.promo2Desc}</p>
+                  </div>
+                  <div className="text-[11px] font-bold text-cyan-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>
+                      {lang === 'ua'
+                        ? 'Спрацьовує автоматично при виборі 5 шт.'
+                        : 'Срабатывает автоматически при выборе 5 шт.'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ГОЛОВНИЙ БЛОК ФІЛЬТРІВ: МІЦНІСТЬ + ПОШУК + ЛІНІЙКИ */}
+            <section className="space-y-4 mb-7">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    id: 'all',
+                    title: t.allStrengths,
+                    sub: t.fullCatalog,
+                    count: strengthCounts.all,
+                    badge: t.flavors36,
+                    color: 'emerald'
+                  },
+                  {
+                    id: '50',
+                    title: '50 MG',
+                    sub: t.softVapor,
+                    count: strengthCounts[50],
+                    badge: t.flavors21,
+                    color: 'cyan'
+                  },
+                  {
+                    id: '60',
+                    title: '60 MG',
+                    sub: t.fpAndSpecial,
+                    count: strengthCounts[60],
+                    badge: t.flavors7,
+                    color: 'violet'
+                  },
+                  {
+                    id: '65',
+                    title: '65 MG',
+                    sub: t.maxStrength,
+                    count: strengthCounts[65],
+                    badge: t.flavors8,
+                    color: 'rose'
+                  }
+                ].map((tab) => {
+                  const active = String(selectedStrength) === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSelectedStrength(tab.id)}
+                      className={`text-left p-3.5 sm:p-4 rounded-2xl border transition-all ${
+                        active
+                          ? 'bg-slate-900 border-emerald-400 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-400/30'
+                          : 'bg-slate-900/60 border-slate-800/90 hover:border-slate-700 hover:bg-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className={`text-base sm:text-lg font-black ${
+                            active ? 'text-emerald-400' : 'text-white'
+                          }`}
+                        >
+                          {tab.title}
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                          {tab.count} {t.pcs}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span className="truncate">{tab.sub}</span>
+                        <span className="text-slate-500 font-semibold ml-1 shrink-0">
+                          {tab.badge}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Рядок пошуку, вибору лінійки та сортування */}
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t.searchPlaceholder}
+                    className="w-full pl-10 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  value={selectedShelf}
+                  onChange={(e) => setSelectedShelf(e.target.value)}
+                  className="px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                >
+                  {t.shelves.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="popular">{t.sortPopular}</option>
+                  <option value="rare">{t.sortRare}</option>
+                  <option value="shelf">{t.sortShelf}</option>
+                  <option value="name">{t.sortName}</option>
+                </select>
+              </div>
+
+              {/* Швидкі чіпси смакових категорій */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {t.categories.map((cat) => {
+                  const active = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+                        active
+                          ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* СІТКА ТОВАРІВ НА ВІТРИНІ */}
+            {filteredProducts.length === 0 ? (
+              <div className="text-center py-14 bg-slate-900/50 rounded-3xl border border-slate-800 p-6">
+                <Package className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-white mb-1">{t.noProductsTitle}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 mb-4">{t.noProductsDesc}</p>
+                <button
+                  onClick={() => {
+                    setSelectedStrength('all');
+                    setSelectedShelf('all');
+                    setSelectedCategory('all');
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs sm:text-sm"
+                >
+                  {t.resetFilters}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredProducts.map((product) => {
+                  const inCartQty = getCartQty(product.sku);
+                  const isOutOfStock = product.stock === 0;
+                  const isLastOne = product.stock === 1;
+                  const pName = getProductName(product);
+                  const pNotes = getProductNotes(product);
+
+                  return (
+                    <div
+                      key={product.sku}
+                      className={`group relative rounded-3xl bg-slate-900/90 border transition-all flex flex-col justify-between overflow-hidden ${
+                        isOutOfStock
+                          ? 'border-slate-800/60 opacity-60'
+                          : inCartQty > 0
+                          ? 'border-emerald-500/80 ring-2 ring-emerald-500/20 shadow-xl'
+                          : 'border-slate-800/90 hover:border-slate-700 hover:-translate-y-0.5 shadow-lg'
+                      }`}
+                    >
+                      {/* Верхня кольорова смужка смаку */}
+                      <div className={`h-2 w-full bg-gradient-to-r ${product.gradient}`} />
+
+                      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
+                        <div>
+                          {/* Верхній рядок: Лінійка та Міцність */}
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300">
+                              {product.line} • {t.codeLabel} {product.sku}
+                            </span>
+                            <span
+                              className={`text-xs font-black px-2.5 py-1 rounded-lg border ${
+                                product.strength === 65
+                                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                                  : product.strength === 60
+                                  ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+                                  : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                              }`}
+                            >
+                              {product.strength} {t.mgLabel}
+                            </span>
+                          </div>
+
+                          {/* Іконка та Назва смаку */}
+                          <div className="flex items-start gap-3.5 mb-3">
+                            <div
+                              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br ${product.gradient} flex items-center justify-center text-2xl sm:text-3xl shadow-md shrink-0`}
+                            >
+                              {product.emoji}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-black text-base sm:text-lg text-white leading-snug break-words">
+                                {pName}
+                              </h3>
+                              <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                                {pNotes}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Нижній блок: Залишок, Ціна €16.00 та Кнопка додавання в кошик */}
+                        <div className="pt-3 border-t border-slate-800/80 mt-2">
+                          {/* Індикатор наявності */}
+                          <div className="flex items-center justify-between text-xs mb-3">
+                            <span className="text-slate-400 font-medium">{t.inStockCard}</span>
+                            <div className="flex items-center gap-1.5">
+                              {isLastOne && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-extrabold animate-pulse">
+                                  🔥 {t.lastOneBadge}
+                                </span>
+                              )}
+                              {product.stock >= 5 && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
+                                  ⭐ {t.hitBadge}
+                                </span>
+                              )}
+                              <span
+                                className={`font-extrabold ${
+                                  isOutOfStock
+                                    ? 'text-rose-400'
+                                    : isLastOne
+                                    ? 'text-amber-300'
+                                    : 'text-emerald-400'
+                                }`}
+                              >
+                                {product.stock} {t.pcs}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Ціна в Євро та Керування кошиком */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-xl font-black text-white leading-none">
+                                €{product.priceEur.toFixed(2)}
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-1">
+                                {t.perBottle}
+                              </div>
+                            </div>
+
+                            {isOutOfStock ? (
+                              <button
+                                disabled
+                                className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-500 font-bold text-xs cursor-not-allowed"
+                              >
+                                {t.soldOut}
+                              </button>
+                            ) : inCartQty > 0 ? (
+                              <div className="flex items-center gap-1.5 bg-slate-950 border border-emerald-500/50 rounded-xl p-1">
+                                <button
+                                  onClick={() => updateCartQty(product.sku, -1)}
+                                  className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-white transition"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-6 text-center font-black text-sm text-emerald-400">
+                                  {inCartQty}
+                                </span>
+                                <button
+                                  onClick={() => updateCartQty(product.sku, 1)}
+                                  className="w-8 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center text-slate-950 transition"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => addToCart(product)}
+                                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-500/10 transition"
+                              >
+                                <Plus className="w-4 h-4 stroke-[2.5]" />
+                                <span>{t.addToCart}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : (
+          /* =====================================================================
+             ЗАХИЩЕНИЙ КАБІНЕТ ВЛАСНИКА (ДОСТУПНИЙ ЛИШЕ ЗА PIN-КОДОМ 7296)
+             ===================================================================== */
+          <div className="space-y-6">
+            {/* Верхня панель власника */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-violet-950/70 via-slate-900 to-slate-900 border border-violet-500/30 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 text-xs font-bold mb-2">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>ЗАКРИТИЙ КАБІНЕТ ВЛАСНИКА • УСІ РОЗРАХУНКИ В ЄВРО (€)</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-white">
+                  Управління складом, накладними клієнтів та прибутком
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  Цей розділ бачиш тільки ти. Покупці на вітрині не бачать закупівельних цін, витрат або твого навару.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  onClick={handleCopyTelegramPricelist}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition"
+                >
+                  {copiedPricelist ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                  <span>
+                    {copiedPricelist ? 'Прайс скопійовано!' : 'Скопіювати прайс для Telegram'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleResetToInitialState}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Скинути до 98 шт.</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('store')}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-bold text-xs hover:bg-slate-800 transition"
+                >
+                  ← На вітрину
+                </button>
+              </div>
+            </div>
+
+            {/* 4 ФІНАНСОВІ КАРТКИ ВЛАСНИКА В ЄВРО */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-3xl bg-slate-900 border border-rose-500/30">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>ЗАГАЛЬНІ ВИТРАТИ (СТАРТ)</span>
+                  <span className="px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-300 font-bold">
+                    Накладна + SIM
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-rose-400">
+                  €{ownerStats.totalExpensesEur.toFixed(2)}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Товар: €555.60 • Доставка: €30.00 • SIM-карта: €9.71
+                </p>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-slate-900 border border-emerald-500/30">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>ФАКТИЧНИЙ ЗАРОБІТОК</span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 font-bold">
+                    Продано {ownerStats.soldBottles} шт.
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-emerald-400">
+                  €{ownerStats.actualRevenueEur.toFixed(2)}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Чистий навар на проданих:{' '}
+                  <strong className="text-emerald-300">
+                    +€{ownerStats.actualGrossProfitEur.toFixed(2)}
+                  </strong>
+                </p>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-slate-900 border border-amber-500/30">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>ЗАЛИШОК ТА ОКУПНІСТЬ</span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 font-bold">
+                    Склад: {ownerStats.remainingBottles} шт.
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-amber-300">
+                  {ownerStats.currentCashBalanceEur < 0
+                    ? `-€${Math.abs(ownerStats.currentCashBalanceEur).toFixed(2)}`
+                    : `+€${ownerStats.currentCashBalanceEur.toFixed(2)}`}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  {ownerStats.bottlesToBreakEven > 0
+                    ? `Ще ${ownerStats.bottlesToBreakEven} шт. по €16 для виходу в чистий нуль`
+                    : 'Точку беззбитковості пройдено!'}
+                </p>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-slate-900 border border-cyan-500/30">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                  <span>ПРОГНОЗ ПРИБУТКУ ПАРТІЇ</span>
+                  <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 font-bold">
+                    Усі 100 шт.
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-cyan-300">
+                  +€{ownerStats.projectedNetProfitEur.toFixed(2)}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Загальна виручка з партії:{' '}
+                  <strong className="text-white">
+                    €{ownerStats.projectedTotalRevenueEur.toFixed(2)}
+                  </strong>
+                </p>
+              </div>
+            </div>
+
+            {/* НОВІ НАКЛАДНІ ВІД КЛІЄНТІВ ІЗ САЙТУ */}
+            {pendingOrders.length > 0 && (
+              <div className="p-5 rounded-3xl bg-amber-950/30 border border-amber-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-amber-300 flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5" />
+                    <span>
+                      Нові накладні від клієнтів з вітрини ({pendingOrders.length})
+                    </span>
+                  </h3>
+                  <span className="text-xs text-amber-200/80">
+                    Натисни «Підтвердити і списати», коли видав товар клієнту
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {pendingOrders.map((ord) => (
+                    <div
+                      key={ord.id}
+                      className="p-4 rounded-2xl bg-slate-900 border border-amber-500/30 flex flex-col justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-black text-amber-300">
+                            Накладна #{ord.id} • {ord.date}
+                          </span>
+                          <span className="font-black text-emerald-400 text-sm">
+                            €{ord.totalEur.toFixed(2)} ({ord.totalBottles} шт.)
+                          </span>
+                        </div>
+                        <div className="text-xs text-white font-bold">
+                          {ord.clientName} ({ord.telegram}) • {ord.handover}
+                        </div>
+                        <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                          {ord.items.map((it) => (
+                            <li key={it.sku}>
+                              • {it.line} — {it.name}: {it.qty} шт.
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                        <button
+                          onClick={() => handleConfirmPendingOrder(ord)}
+                          className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition"
+                        >
+                          ✓ Підтвердити і списати зі складу
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPendingOrders((prev) =>
+                              prev.filter((o) => o.id !== ord.id)
+                            )
+                          }
+                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 text-xs font-bold transition"
+                        >
+                          Відхилити
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ПРОВЕДЕННЯ ПРОДАЖУ ВРУЧНУ + НАЛАШТУВАННЯ TELEGRAM І PIN-КОДУ */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <form
+                onSubmit={handleManualOwnerSale}
+                className="lg:col-span-2 p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4"
+              >
+                <div className="flex items-center gap-2">
+                  <PlusCircle className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-base font-black text-white">
+                    Провести продаж вручну (за будь-якою ціною: €6, €10, €16)
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                      Смак на складі
+                    </label>
+                    <select
+                      value={manualSaleSku}
+                      onChange={(e) => setManualSaleSku(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      {products.map((p) => (
+                        <option key={p.sku} value={p.sku} disabled={p.stock === 0}>
+                          [{p.sku}] {p.line} — {p.nameUa} (Залишок: {p.stock} шт.)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                        К-сть (шт.)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={manualSaleQty}
+                        onChange={(e) => setManualSaleQty(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-amber-300 mb-1">
+                        Ціна (€/шт.)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="1"
+                        value={manualSalePriceEur}
+                        onChange={(e) => setManualSalePriceEur(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-amber-950/30 border border-amber-500/40 rounded-xl text-sm font-black text-amber-300 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                      Ім’я покупця
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSaleClient}
+                      onChange={(e) => setManualSaleClient(e.target.value)}
+                      placeholder="Напр. Сергій"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                      Нікнейм (Telegram)
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSaleTg}
+                      onChange={(e) => setManualSaleTg(e.target.value)}
+                      placeholder="@username"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                      Примітка
+                    </label>
+                    <input
+                      type="text"
+                      value={manualSaleNote}
+                      onChange={(e) => setManualSaleNote(e.target.value)}
+                      placeholder="Напр. Самовивіз"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition"
+                >
+                  Списати зі складу та додати в журнал
+                </button>
+              </form>
+
+              {/* Налаштування Telegram для прийому накладних та PIN-коду */}
+              <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Send className="w-4 h-4 text-sky-400" />
+                  <span>Налаштування Telegram та доступу</span>
+                </h3>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold uppercase text-slate-400 mb-1">
+                      Твій робочий Telegram для прийому накладних
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 font-bold">@</span>
+                      <input
+                        type="text"
+                        value={managerTelegram.replace('@', '')}
+                        onChange={(e) =>
+                          setManagerTelegram(e.target.value.replace('@', '').trim())
+                        }
+                        className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-bold focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Зараз встановлено: <strong>@zhizha_chaiser</strong>
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <label className="block font-bold uppercase text-slate-400 mb-1">
+                      Змінити PIN-код входу в Кабінет Власника
+                    </label>
+                    <input
+                      type="password"
+                      value={ownerPin}
+                      onChange={(e) => setOwnerPin(e.target.value.trim() || '7296')}
+                      placeholder="••••"
+                      className="w-32 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-amber-300 font-black tracking-widest focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Клієнтська база власника та Журнал продажів */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Клієнтська база (CRM) */}
+              <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-cyan-400" />
+                    <span>
+                      Клієнтська база ({Math.max(ownerStats.clientsList.length, cloudCustomers.length)})
+                    </span>
+                  </h3>
+                  <span className="text-xs text-emerald-400 flex items-center gap-1">
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>Хмарне збереження</span>
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {/* Клієнти з історії покупок */}
+                  {ownerStats.clientsList.map((cl, i) => (
+                    <div
+                      key={i}
+                      className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-white">
+                            {cl.clientName}
+                          </span>
+                          <span className="text-xs font-semibold text-cyan-400">
+                            {cl.telegram}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {cl.purchases.join(' • ')}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-black text-emerald-400">
+                          €{cl.totalSpentEur.toFixed(2)} ({cl.totalQty} шт.)
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          Твій навар: +€{cl.totalProfitEur.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Додатково зареєстровані клієнти з хмари, які ще не робили замовлень */}
+                  {cloudCustomers
+                    .filter(
+                      (cc) =>
+                        !ownerStats.clientsList.some(
+                          (ol) => ol.telegram.toLowerCase() === (cc.telegram || '').toLowerCase()
+                        )
+                    )
+                    .map((cc, idx) => (
+                      <div
+                        key={`cloud_${idx}`}
+                        className="p-3.5 rounded-2xl bg-slate-950/40 border border-slate-800/60 flex items-center justify-between gap-3"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-white">{cc.name}</span>
+                            <span className="text-xs font-semibold text-cyan-400">
+                              {cc.telegram}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Зареєстрований користувач • {cc.handover === 'pickup' ? 'Самовивіз' : 'Доставка'}
+                          </p>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                          Новий
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Журнал проведених продажів */}
+              <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-white flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-emerald-400" />
+                    <span>Журнал продажів ({salesHistory.length})</span>
+                  </h3>
+                  <span className="text-xs text-emerald-400 font-bold">
+                    Разом: €{ownerStats.actualRevenueEur.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {salesHistory.map((s) => {
+                    const revenue = s.qty * s.priceEur;
+                    const profit = revenue - s.qty * s.costEur;
+                    return (
+                      <div
+                        key={s.id}
+                        className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-white truncate">
+                            {s.productName}
+                          </div>
+                          <div className="text-slate-400 mt-0.5">
+                            {s.date} • {s.clientName} ({s.telegram}) • {s.note}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-black text-sm text-emerald-400">
+                            €{revenue.toFixed(2)} ({s.qty} шт.)
+                          </div>
+                          <div className="text-[11px] text-cyan-300">
+                            Чистими: +€{profit.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* ПІДВАЛ САЙТУ */}
+      <footer className="relative z-10 border-t border-slate-900 bg-slate-950/90 py-6 px-4 sm:px-6 mt-10">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <Flame className="w-4 h-4 text-emerald-500" />
+            <span>{t.footerCopy}</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <a
+              href={`https://t.me/${managerTelegram.replace('@', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-400 hover:text-emerald-400 transition font-semibold"
+            >
+              {t.footerTg} @{managerTelegram.replace('@', '')}
+            </a>
+
+            <button
+              onClick={openOwnerPanel}
+              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-300 transition"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>{t.ownerBtn}</span>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* ПЛАВАЮЧА ПАНЕЛЬ КОШИКА ВНИЗУ ЕКРАНА */}
+      {cartDetails.totalBottles > 0 && !isCartOpen && viewMode === 'store' && (
+        <div className="fixed bottom-4 inset-x-4 z-30 max-w-xl mx-auto">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-emerald-500/50 shadow-2xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                {cartDetails.totalBottles}
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-black text-white">
+                  {t.floatingCartText} {cartDetails.totalBottles} {t.pcs} —{' '}
+                  <span className="text-emerald-400">
+                    €{cartDetails.totalEur.toFixed(2)}
+                  </span>
+                  {cartDetails.totalDiscountEur > 0 && (
+                    <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                      -€{cartDetails.totalDiscountEur.toFixed(0)}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400">{t.floatingCartSub}</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition"
+            >
+              {t.checkoutBtn} →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+         БІЧНА ПАНЕЛЬ КОШИКА ТА ОФОРМЛЕННЯ НАКЛАДНОЇ (ТІЛЬКИ ДЛЯ КЛІЄНТА, В ЄВРО)
+         ===================================================================== */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-slate-900 border-l border-slate-800 h-full flex flex-col justify-between overflow-hidden shadow-2xl">
+            {/* Шапка кошика */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ShoppingBag className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-lg font-black text-white">{t.cartTitle}</h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-bold">
+                  {cartDetails.totalBottles} {t.pcs}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsCartOpen(false)}
+                className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Список товарів + Акції + Форма клієнта */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {cartDetails.items.length === 0 ? (
+                <div className="text-center py-16">
+                  <ShoppingBag className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-base font-bold text-white mb-1">{t.emptyCartTitle}</p>
+                  <p className="text-xs text-slate-400">{t.emptyCartDesc}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Підказка до акції (якщо в кошику 2 або 4 шт.) */}
+                  {cartDetails.totalBottles % 5 === 2 && (
+                    <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-bold text-emerald-300">
+                      {t.promoUpsell1}
+                    </div>
+                  )}
+                  {cartDetails.totalBottles % 5 === 4 && (
+                    <div className="p-3 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-xs font-bold text-cyan-300">
+                      {t.promoUpsell2}
+                    </div>
+                  )}
+
+                  {/* Картки обраних позицій */}
+                  <div className="space-y-3">
+                    {cartDetails.items.map((item) => (
+                      <div
+                        key={item.sku}
+                        className="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-lg shrink-0`}
+                          >
+                            {item.emoji}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-sm text-white truncate">
+                              {getProductName(item)}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {item.line} • {item.strength} {t.mgLabel} • {t.priceLabel} €
+                              {item.unitPrice.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
+                            <button
+                              onClick={() => updateCartQty(item.sku, -1)}
+                              className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-white"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-5 text-center text-xs font-black text-emerald-400">
+                              {item.qty}
+                            </span>
+                            <button
+                              onClick={() => updateCartQty(item.sku, 1)}
+                              className="w-6 h-6 rounded-lg bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center text-slate-950"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          <div className="font-black text-sm text-emerald-400">
+                            €{item.subtotalEur.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Інформація про отримання: Самовивіз або Доставка по Німеччині */}
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+                    <div className="text-xs font-black text-amber-300">
+                      {t.pickupOnlyBannerTitle}
+                    </div>
+                    <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                      {t.pickupOnlyBannerDesc}
+                    </p>
+                  </div>
+
+                  {/* Форма оформлення накладної */}
+                  <form
+                    id="checkout-form"
+                    onSubmit={handleCustomerCheckoutToTelegram}
+                    className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase text-emerald-400">
+                        {t.formHeader}
+                      </span>
+                      {customerProfile && (
+                        <span className="text-[11px] text-cyan-400 font-semibold">
+                          {t.autoFilled}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          {t.yourNameLabel}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={checkoutName}
+                          onChange={(e) => setCheckoutName(e.target.value)}
+                          placeholder={t.yourNamePlaceholder}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          {t.yourTgLabel}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={checkoutTelegram}
+                          onChange={(e) => setCheckoutTelegram(e.target.value)}
+                          placeholder="@username"
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Вибір формату: Самовивіз або Доставка по Німеччині */}
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1.5">
+                        {t.handoverMethodLabel}
+                      </label>
+                      <div className="grid grid-cols-1 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutHandover('pickup')}
+                          className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center gap-2 transition ${
+                            checkoutHandover === 'pickup'
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <MapPin className="w-4 h-4 shrink-0 text-emerald-400" />
+                          <span>{t.methodPickup}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutHandover('germany_delivery')}
+                          className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center gap-2 transition ${
+                            checkoutHandover === 'germany_delivery'
+                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                          }`}
+                        >
+                          <Truck className="w-4 h-4 shrink-0 text-cyan-400" />
+                          <span>{t.methodGermanyDelivery}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">
+                        {t.commentLabel}
+                      </label>
+                      <input
+                        type="text"
+                        value={checkoutComment}
+                        onChange={(e) => setCheckoutComment(e.target.value)}
+                        placeholder={t.commentPlaceholder}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+
+            {/* Підвал кошика з автоматичним підрахунком знижок та переходом на @zhizha_chaiser */}
+            {cartDetails.items.length > 0 && (
+              <div className="p-5 bg-slate-950 border-t border-slate-800 space-y-3">
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-400">
+                    <span>{t.totalBottlesLabel}</span>
+                    <span className="font-bold text-white">
+                      {cartDetails.totalBottles} {t.pcs}
+                    </span>
+                  </div>
+
+                  {cartDetails.totalDiscountEur > 0 && (
+                    <div className="flex justify-between text-slate-400">
+                      <span>{t.subtotalLabel}</span>
+                      <span className="line-through">€{cartDetails.baseTotalEur.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {cartDetails.bundleDiscountEur > 0 && (
+                    <div className="flex justify-between text-emerald-400 font-bold">
+                      <span>{t.bundleDiscountLabel}</span>
+                      <span>-€{cartDetails.bundleDiscountEur.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-baseline pt-2 border-t border-slate-800">
+                    <span className="text-sm font-bold text-white">{t.totalToPayLabel}</span>
+                    <span className="text-2xl font-black text-emerald-400">
+                      €{cartDetails.totalEur.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="submit"
+                    form="checkout-form"
+                    className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>{t.sendToTelegramBtn}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={clearCart}
+                    className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-rose-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{t.clearCartBtn}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+         МОДАЛЬНЕ ВІКНО СФОРМОВАНОЇ НАКЛАДНОЇ (ПЕРЕХІД В TELEGRAM @zhizha_chaiser)
+         ===================================================================== */}
+      {createdInvoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-emerald-500/40 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">{t.invoiceModalTitle}</h3>
+                  <p className="text-xs text-slate-400">{t.invoiceModalSub}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCreatedInvoiceModal(null)}
+                className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <pre className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 whitespace-pre-wrap font-mono max-h-60 overflow-y-auto">
+              {createdInvoiceModal.invoiceText}
+            </pre>
+
+            <div className="space-y-2.5">
+              <a
+                href={createdInvoiceModal.tgWebUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-300 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition"
+              >
+                <Send className="w-4 h-4" />
+                <span>
+                  {t.openTgChatBtn} (@{managerTelegram.replace('@', '')})
+                </span>
+              </a>
+
+              <a
+                href={createdInvoiceModal.tgAppUrl}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 font-bold text-xs flex items-center justify-center gap-2 transition"
+              >
+                <span>{t.openTgAppBtn}</span>
+              </a>
+
+              <button
+                onClick={() => {
+                  safeCopyToClipboard(createdInvoiceModal.invoiceText);
+                  setCopiedInvoice(true);
+                  setTimeout(() => setCopiedInvoice(false), 2000);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition"
+              >
+                {copiedInvoice ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-400">{t.copiedText}</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>{t.copyAgainBtn}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+         МОДАЛЬНЕ ВІКНО РЕЄСТРАЦІЇ ПОКУПЦЯ (САМОВИВІЗ АБО ДОСТАВКА ПО НІМЕЧЧИНІ)
+         ===================================================================== */}
+      {isAccountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <User className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-lg font-black text-white">{t.accountModalTitle}</h3>
+              </div>
+              <button
+                onClick={() => setIsAccountModalOpen(false)}
+                className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Перемикач вкладок: Реєстрація / Мої накладні */}
+            <div className="flex gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setAccountTab('profile')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                  accountTab === 'profile'
+                    ? 'bg-cyan-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t.tabProfile}
+              </button>
+              <button
+                onClick={() => setAccountTab('orders')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                  accountTab === 'orders'
+                    ? 'bg-cyan-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t.tabOrders} ({customerOrders.length})
+              </button>
+            </div>
+
+            {accountTab === 'profile' ? (
+              <form onSubmit={handleSaveCustomerProfile} className="space-y-3 text-xs">
+                <p className="text-slate-400 leading-relaxed">{t.regInfoText}</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {t.yourNameLabel}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      placeholder={t.yourNamePlaceholder}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      {t.yourTgLabel}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={regTelegram}
+                      onChange={(e) => setRegTelegram(e.target.value)}
+                      placeholder="@username"
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1.5">
+                    {t.handoverMethodLabel}
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRegHandover('pickup')}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold flex items-center gap-2 transition ${
+                        regHandover === 'pickup'
+                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                          : 'bg-slate-950 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{t.methodPickup}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRegHandover('germany_delivery')}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold flex items-center gap-2 transition ${
+                        regHandover === 'germany_delivery'
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                          : 'bg-slate-950 border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <Truck className="w-4 h-4 text-cyan-400 shrink-0" />
+                      <span>{t.methodGermanyDelivery}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs sm:text-sm transition"
+                  >
+                    {t.saveProfileBtn}
+                  </button>
+                  {customerProfile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerProfile(null);
+                        setRegName('');
+                        setRegTelegram('');
+                        showToast('Профіль покупця очищено');
+                      }}
+                      className="px-4 py-3 rounded-xl bg-slate-800 text-slate-400 hover:text-rose-300 font-bold text-xs"
+                    >
+                      {t.logoutBtn}
+                    </button>
+                  )}
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                {customerOrders.length === 0 ? (
+                  <p className="text-center py-8 text-xs text-slate-400">{t.noOrdersYet}</p>
+                ) : (
+                  customerOrders.map((ord) => {
+                    const cleanManager =
+                      managerTelegram.replace('@', '').trim() || 'zhizha_chaiser';
+                    const tgLink = `https://t.me/${cleanManager}?text=${encodeURIComponent(
+                      ord.invoiceText
+                    )}`;
+                    return (
+                      <div
+                        key={ord.id}
+                        className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-cyan-400">
+                            #{ord.id} • {ord.date}
+                          </span>
+                          <span className="font-black text-emerald-400 text-sm">
+                            €{ord.totalEur.toFixed(2)} ({ord.totalBottles} {t.pcs})
+                          </span>
+                        </div>
+                        <div className="text-slate-300 space-y-0.5">
+                          {ord.items.map((it) => (
+                            <div key={it.sku}>
+                              • {it.line} — {it.name}: {it.qty} шт.
+                            </div>
+                          ))}
+                        </div>
+                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                          <span className="text-[11px] text-slate-400">{ord.handover}</span>
+                          <a
+                            href={tgLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sky-400 hover:text-sky-300 font-bold"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>{t.reopenInTg}</span>
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* МОДАЛЬНЕ ВІКНО ВВЕДЕННЯ PIN-КОДУ ВЛАСНИКА (БЕЗ ПІДКАЗКИ ПАРОЛЯ) */}
+      {isPinModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <form
+            onSubmit={handleVerifyPin}
+            className="w-full max-w-sm rounded-3xl bg-slate-900 border border-violet-500/40 p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-violet-400" />
+                <h3 className="text-base font-black text-white">Вхід для власника</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPinModalOpen(false)}
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Введіть персональний PIN-код доступу для перегляду фінансів та управління складом.
+            </p>
+
+            <div>
+              <input
+                type="password"
+                autoFocus
+                value={pinInput}
+                onChange={(e) => {
+                  setPinInput(e.target.value);
+                  setPinError('');
+                }}
+                placeholder="••••"
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-black tracking-widest text-white focus:outline-none focus:border-violet-500"
+              />
+              {pinError && (
+                <p className="text-xs font-bold text-rose-400 text-center mt-2">{pinError}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-black text-xs sm:text-sm transition"
+            >
+              Розблокувати Кабінет Власника
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
